@@ -1,0 +1,104 @@
+# Description: Remove AAP objects created by the platform bootstrap.
+---
+- name: Remove child AAP objects before the organization
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  collections:
+    - infra.aap_configuration
+    - ansible.builtin
+  vars_files:
+    - ../../vault.yml
+    - ../../group_vars/all/demo_variables.yml
+
+  pre_tasks:
+    - name: Require explicit AAP cleanup confirmation
+      ansible.builtin.assert:
+        that:
+          - demo_aap_cleanup_confirm | default(false) | bool
+        fail_msg: >-
+          AAP cleanup is destructive. Re-run with
+          -e demo_aap_cleanup_confirm=true.
+
+    - name: Set AAP authentication variables
+      ansible.builtin.set_fact:
+        aap_token: "{{ vault_aap_token }}"
+
+    - name: Check whether the demo organization still exists
+      ansible.builtin.uri:
+        url: "https://{{ aap_hostname }}/api/controller/v2/organizations/?name={{ demo_organization_name | urlencode }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ vault_aap_token }}"
+        validate_certs: "{{ aap_validate_certs }}"
+        status_code: 200
+        return_content: true
+      register: demo_organization_lookup
+
+    - name: Set organization existence fact
+      ansible.builtin.set_fact:
+        demo_organization_exists: "{{ demo_organization_lookup.json.count | default(0) | int > 0 }}"
+
+  vars:
+    aap_organizations: []
+    controller_credentials:
+      - name: "{{ demo_machine_credential_name }}"
+        organization: "{{ demo_organization_name }}"
+        credential_type: Machine
+        state: absent
+    controller_inventories:
+      - name: "{{ demo_inventory_name }}"
+        organization: "{{ demo_organization_name }}"
+        state: absent
+    controller_projects:
+      - name: "{{ demo_state_project_name }}"
+        organization: "{{ demo_organization_name }}"
+        state: absent
+      - name: "{{ demo_platform_project_name }}"
+        organization: "{{ demo_organization_name }}"
+        state: absent
+    controller_templates:
+      - name: JT - RHEL GitOps Reconciliation
+        organization: "{{ demo_organization_name }}"
+        state: absent
+      - name: JT - RHEL GitOps Provision VMs
+        organization: "{{ demo_organization_name }}"
+        state: absent
+      - name: JT - RHEL GitOps Discover Inventory
+        organization: "{{ demo_organization_name }}"
+        state: absent
+      - name: JT - RHEL GitOps Cleanup
+        organization: "{{ demo_organization_name }}"
+        state: absent
+
+  tasks:
+    - name: Remove child AAP objects
+      ansible.builtin.include_role:
+        name: infra.aap_configuration.dispatch
+      when: demo_organization_exists | bool
+      tags: [cleanup]
+
+- name: Remove the demo AAP organization
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  collections:
+    - infra.aap_configuration
+    - ansible.builtin
+  vars_files:
+    - ../../vault.yml
+    - ../../group_vars/all/demo_variables.yml
+
+  pre_tasks:
+    - name: Set AAP authentication variables
+      ansible.builtin.set_fact:
+        aap_token: "{{ vault_aap_token }}"
+
+  vars:
+    aap_organizations:
+      - name: "{{ demo_organization_name }}"
+        state: absent
+
+  roles:
+    - role: infra.aap_configuration.dispatch
+      tags: [cleanup]

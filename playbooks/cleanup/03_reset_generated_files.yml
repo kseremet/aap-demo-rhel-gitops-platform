@@ -1,0 +1,31 @@
+# Description: Restore platform-generated files to their clean skeleton state.
+---
+- name: Reset generated platform files
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  collections:
+    - ansible.builtin
+
+  tasks:
+    - name: Restore lab inventory skeleton
+      ansible.builtin.template:
+        src: ../../templates/lab_inventory_skeleton.yml.j2
+        dest: "{{ playbook_dir }}/../../environments/lab/inventory.yml"
+        mode: "0644"
+
+    - name: Restore generated AAP inventory skeleton
+      ansible.builtin.template:
+        src: ../../templates/generated_inventory_skeleton.yml.j2
+        dest: "{{ playbook_dir }}/../../group_vars/all/generated_inventory.yml"
+        mode: "0644"
+
+    - name: Remove runtime SSH private key
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/../../runtime/demo_key"
+        state: absent
+
+    - name: Remove runtime SSH public key
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/../../runtime/demo_key.pub"
+        state: absent

@@ -57,10 +57,10 @@ controller_templates:
     inventory: "{{ demo_inventory_name }}"
     project: "{{ demo_platform_project_name }}"
     playbook: playbooks/setup/03_discover_inventory.yml
-  - name: JT - RHEL GitOps Remove VMs
+  - name: JT - RHEL GitOps Cleanup
     organization: "{{ demo_organization_name }}"
     job_type: run
     inventory: "{{ demo_inventory_name }}"
     project: "{{ demo_platform_project_name }}"
-    playbook: playbooks/cleanup/01_remove_vms.yml
+    playbook: playbooks/cleanup.yml
     survey_enabled: true

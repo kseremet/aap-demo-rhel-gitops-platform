@@ -5,7 +5,7 @@ all:
   hosts:
     localhost:
       ansible_connection: local
-      ansible_python_interpreter: "/Users/kseremet/Developer/aap-workbench/artifacts/demos/aap-demo-rhel-gitops-platform/.venv/bin/python"
+      ansible_python_interpreter: "{{ ansible_playbook_python }}"
   children:
     rhel_fleet:
       vars:

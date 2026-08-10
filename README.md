@@ -150,20 +150,34 @@ Project sync and job launch after a Git commit.
 
 ### 6. Reset the lab
 
-Destroying VMs is a platform operation and must be deliberate:
+The master cleanup removes AAP objects, deletes the VMs, restores the generated
+inventory files to boilerplate, and removes the runtime SSH key:
 
 ```bash
-ansible-playbook playbooks/cleanup/01_remove_vms.yml --vault-id @prompt
+ansible-playbook \
+  playbooks/cleanup.yml \
+  --vault-id @prompt \
+  -e demo_aap_cleanup_confirm=true \
+  -e demo_destroy_confirm=true
 ```
 
-Resetting the platform lab must not reset or rewrite the state repository.
+The individual cleanup stages remain available for troubleshooting:
+
+```bash
+ansible-playbook playbooks/cleanup/01_remove_aap.yml --vault-id @prompt -e demo_aap_cleanup_confirm=true
+ansible-playbook playbooks/cleanup/02_remove_vms.yml --vault-id @prompt -e demo_destroy_confirm=true
+ansible-playbook playbooks/cleanup/03_reset_generated_files.yml
+```
+
+Resetting the platform lab does not reset or rewrite the state repository.
 
 ## Layout
 
 | Path | Purpose |
 |---|---|
 | `playbooks/setup/` | Ordered key, VM, and discovery operations |
-| `playbooks/cleanup/` | Explicit VM teardown operations |
+| `playbooks/cleanup.yml` | Master teardown and generated-file reset entry point |
+| `playbooks/cleanup/` | AAP teardown, VM deletion, and local reset stages |
 | `playbooks/aap_config.yml` | AAP Configuration as Code entry point |
 | `environments/lab/inventory.yml` | Visible generated lab inventory |
 | `group_vars/all/` | Platform and AAP configuration variables |

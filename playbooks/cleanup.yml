@@ -1,0 +1,5 @@
+# Description: Destroy the complete disposable RHEL GitOps demo environment.
+---
+- ansible.builtin.import_playbook: cleanup/01_remove_aap.yml
+- ansible.builtin.import_playbook: cleanup/02_remove_vms.yml
+- ansible.builtin.import_playbook: cleanup/03_reset_generated_files.yml
