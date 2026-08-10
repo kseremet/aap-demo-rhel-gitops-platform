@@ -1,0 +1,92 @@
+---
+description: Naming conventions and structure standards for vault.yml.example in aap-demo-* artifacts
+alwaysApply: false
+globs: artifacts/demos/**
+---
+
+# vault.yml.example naming conventions
+
+## Variable naming
+
+- Every variable **must** carry the `vault_` prefix: `vault_<plain_name>`.
+- The plain name after the prefix must match exactly the variable used in `demo_variables.yml.example` vault-mapping section (e.g. `vault_controller_password` maps to `controller_password`).
+- Use `snake_case`; no camelCase, no hyphens.
+- Cloud provider variables include the provider slug: `vault_azure_*`, `vault_aws_*`, `vault_gcp_*`.
+- EDA connection secrets: `vault_eda_controller_username`, `vault_eda_controller_password`.
+- Platform Gateway PAT (optional, for token-based auth): `vault_aap_token`.
+
+## HashiCorp Vault naming collision
+
+When a demo integrates **HashiCorp Vault** (the product), variables that refer to
+HashiCorp Vault's own API must be clearly scoped to avoid confusion with Ansible Vault:
+
+```yaml
+# HashiCorp Vault AppRole — unrelated to ansible-vault encryption
+vault_hashi_approle_role_id: CHANGE_ME
+vault_hashi_approle_secret_id: CHANGE_ME
+vault_hashi_addr: CHANGE_ME
+```
+
+Use `vault_hashi_*` for HashiCorp Vault product secrets; reserve bare `vault_*` for
+Ansible Vault–encrypted credentials.
+
+## Required variables (baseline for every demo)
+
+```yaml
+vault_controller_username: CHANGE_ME
+vault_controller_password: CHANGE_ME
+```
+
+Add one block per cloud provider or third-party service the demo integrates.
+
+## Values
+
+- Unset secrets use the literal string `CHANGE_ME` (no quotes unless special characters require it).
+- Prefer semantic suffixes for clarity when multiple CHANGE_ME values in the same block
+  could be confused: `CHANGE_ME_ROLE_ID`, `CHANGE_ME_SECRET_ID`.
+- Do **not** place real values or placeholders that look like real secrets (UUIDs, ARNs, base64 blobs).
+- Do **not** store non-secret configuration (hostnames, subscription IDs, region names, resource
+  group names) in `vault.yml.example` — those belong in `demo_variables.yml.example`.
+  Anti-pattern: a `vault_azure_subscription_id` variable in vault (subscription IDs are not secrets).
+
+## Structure
+
+- File header: `# ============================================================================` banner
+  with title `VAULT SECRETS (EXAMPLE)`, copy/encrypt instructions, and gitignore note.
+- Group related variables under `# --- <Group label> ---` section comments.
+- Optional variables carry a comment stating the enabling condition
+  (e.g. `# Only required when enable_email_notification: true`).
+- **Section order:** AAP credentials → EDA credentials (if in scope) → cloud providers
+  (alphabetical: AWS, Azure, GCP) → third-party services → optional integrations.
+
+## What belongs here vs demo_variables.yml.example
+
+| File | What goes here |
+|---|---|
+| `vault.yml.example` | Secrets only — credentials, keys, tokens, passwords |
+| `demo_variables.yml.example` | Everything else — hostnames, IDs, flags, names, vault mappings |
+
+## Common credential blocks by integration
+
+```yaml
+# --- AWS IAM ---
+vault_aws_access_key: CHANGE_ME
+vault_aws_secret_key: CHANGE_ME
+
+# --- Azure Service Principal ---
+vault_azure_client_id: CHANGE_ME
+vault_azure_client_secret: CHANGE_ME
+
+# --- GCP service account ---
+vault_gcp_service_account_key: CHANGE_ME
+
+# --- EDA Controller (when EDA is in scope) ---
+vault_eda_controller_username: CHANGE_ME
+vault_eda_controller_password: CHANGE_ME
+
+# --- Platform Gateway PAT (optional — alternative to username/password auth) ---
+vault_aap_token: CHANGE_ME
+
+# --- Private Automation Hub registry (when a custom EE is pushed/pulled) ---
+vault_hub_registry_password: CHANGE_ME
+```

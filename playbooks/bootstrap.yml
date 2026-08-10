@@ -1,0 +1,6 @@
+# Description: Build the lab and configure AAP in one self-contained run.
+---
+- ansible.builtin.import_playbook: setup/01_generate_keys.yml
+- ansible.builtin.import_playbook: setup/02_provision_vms.yml
+- ansible.builtin.import_playbook: setup/03_discover_inventory.yml
+- ansible.builtin.import_playbook: aap_config.yml

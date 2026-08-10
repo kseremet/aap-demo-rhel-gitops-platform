@@ -1,0 +1,9 @@
+---
+collections:
+  - name: infra.aap_configuration
+  - name: ansible.controller
+  - name: kubevirt.core
+  - name: kubernetes.core
+  - name: community.crypto
+
+roles: []

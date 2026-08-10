@@ -1,0 +1,74 @@
+---
+description: Load and maintain docs/testing.md at the start of every session on any aap-demo artifact.
+alwaysApply: false
+globs: artifacts/demos/**
+---
+
+# Demo testing log
+
+At the start of any session where you work on files under an `aap-demo-*` artifact:
+
+1. **Check whether `docs/testing.md` exists** inside that demo. If it does not, create it using the template below, then inform the user.
+2. **Read `docs/testing.md`** and report the status summary table and the open issues list to the user in a single concise message. Do not dump the full file.
+2. After completing work that changes the state of a testable component, **propose an update** to `docs/testing.md` — the affected row(s) in the status summary and, if needed, the open issues list. Ask the user to confirm before writing.
+
+## Rules
+
+- Never mark a component `Pass` unless the user explicitly confirms a successful end-to-end run.
+- Keep the status summary table and the open issues list in sync with the current state after each session.
+
+## Template for new `docs/testing.md`
+
+```markdown
+# Testing log
+
+Tracks testing progress for this demo. Update after each session. For procedural verification steps, see [verification.md](verification.md).
+
+**Status values:** `Not tested` · `Pass` · `Partial` · `Fail` · `Blocked`
+
+## Status summary
+
+### Entry playbooks
+
+| Component | Status | Last tested | Notes |
+|---|---|---|---|
+| CasC apply (`aap_config.yml`) | Not tested | — | |
+| CasC cleanup (`aap_cleanup.yml`) | Not tested | — | |
+| Smoke test (`verify.yml`) | Not tested | — | |
+
+### Roles
+
+| Component | Status | Last tested | Notes |
+|---|---|---|---|
+| _(none — add roles here if the demo uses custom roles)_ | — | — | |
+
+### Execution environments
+
+| Component | Status | Last tested | Notes |
+|---|---|---|---|
+| EE build and push | Not tested | — | |
+
+### Inventories
+
+| Component | Status | Last tested | Notes |
+|---|---|---|---|
+| _(list static/dynamic/constructed inventories)_ | Not tested | — | |
+
+### Job templates
+
+| Component | Status | Last tested | Notes |
+|---|---|---|---|
+| _(list individual job templates)_ | Not tested | — | |
+
+### Workflows
+
+| Component | Status | Last tested | Notes |
+|---|---|---|---|
+| _(list workflow job templates)_ | Not tested | — | |
+
+## Open issues
+
+- None
+```
+
+When creating `docs/testing.md` for a specific demo, replace placeholder rows with actual component names drawn from the demo's `group_vars/all/` CasC files and `roles/` directory. Remove entire sections that do not apply (for example, omit the **Roles** section if the demo has no custom roles, or omit **EDA** rows if EDA is not in scope). Add an **EDA** section with rulebook activations and EDA projects when the demo includes Event-Driven Ansible.

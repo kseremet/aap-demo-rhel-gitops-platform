@@ -1,0 +1,25 @@
+---
+description: Enforces hard stops when skills or prerequisite checks instruct the agent to stop
+alwaysApply: true
+---
+
+# Skill Stop Enforcement
+
+When any skill file, prerequisite check, or gateway file instructs you to **stop** (phrases such as "Stop execution immediately", "abort anything you are doing", "Do not proceed", "stop execution"), you must:
+
+1. **Stop immediately.** Do not continue the workflow.
+2. **Report the exact blocker to the user** (missing file, missing setup step, etc.).
+3. **NEVER fall back to answering from training data or general knowledge** as a substitute for the blocked workflow. This applies even if you believe you know the answer.
+4. **Do not attempt partial completion** of the skill's intended task.
+
+## Why this matters
+
+Skills are designed around a specific knowledge source (local files, wiki, NotebookLM). Answering from training data when a skill stops bypasses quality controls and may produce outdated or incorrect information without the user knowing.
+
+## Example
+
+If a prerequisite check cannot find `workbench.ini`, the correct response is:
+
+> "`workbench.ini` is missing. Please create it from `workbench.example.ini`, then restart Cursor and open a new chat."
+
+The incorrect response is to answer the user's original question anyway using training data.

@@ -1,0 +1,67 @@
+# Description: Provision the RHEL GitOps VMs on OpenShift Virtualization.
+---
+- name: Provision RHEL GitOps VMs
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  collections:
+    - kubernetes.core
+    - ansible.builtin
+  vars_files:
+    - ../../vault.yml
+    - ../../group_vars/all/demo_variables.yml
+    - ../../group_vars/all/vm_specs.yml
+
+  vars:
+    _vm_list: "{{ vm_specs | dict2items }}"
+    _ssh_public_key_path: "{{ playbook_dir }}/../../{{ demo_ssh_private_key_file }}.pub"
+    _cloud_init_user_data: |
+      #cloud-config
+      user: cloud-user
+      ssh_authorized_keys:
+        - {{ lookup('ansible.builtin.file', _ssh_public_key_path) | trim }}
+      ssh_pwauth: false
+      disable_root: true
+
+  tasks:
+    - name: Create or update KubeVirt VirtualMachines
+      kubernetes.core.k8s:
+        state: present
+        host: "{{ openshift_api_url }}"
+        api_key: "{{ vault_openshift_token }}"
+        validate_certs: "{{ openshift_validate_certs }}"
+        definition: "{{ lookup('ansible.builtin.template', '../../templates/vm_spec.yaml.j2') }}"
+      vars:
+        vm_name: "{{ item.value.vm_name }}"
+        vm_namespace: "{{ openshift_vm_namespace }}"
+        role: "{{ item.value.role }}"
+        cpu_cores: "{{ item.value.cpu_cores }}"
+        memory: "{{ item.value.memory }}"
+        data_disks: "{{ item.value.data_disks | default([]) }}"
+        datasource_name: "{{ openshift_vm_datasource_name }}"
+        datasource_namespace: "{{ openshift_vm_datasource_namespace }}"
+        storage_size: "{{ openshift_vm_storage_size }}"
+        multus_network: "{{ openshift_vm_multus_network_name }}"
+        cloud_init_user_data: "{{ _cloud_init_user_data }}"
+      loop: "{{ _vm_list }}"
+      loop_control:
+        label: "{{ item.value.vm_name }}"
+
+    - name: Wait for all VMs to reach Running state
+      kubernetes.core.k8s_info:
+        api_version: kubevirt.io/v1
+        kind: VirtualMachine
+        name: "{{ item.value.vm_name }}"
+        namespace: "{{ openshift_vm_namespace }}"
+        host: "{{ openshift_api_url }}"
+        api_key: "{{ vault_openshift_token }}"
+        validate_certs: "{{ openshift_validate_certs }}"
+      register: vm_status
+      until:
+        - vm_status.resources | length > 0
+        - vm_status.resources[0].status.printableStatus | default('') == 'Running'
+      retries: 30
+      delay: 10
+      loop: "{{ _vm_list }}"
+      loop_control:
+        label: "{{ item.value.vm_name }}"

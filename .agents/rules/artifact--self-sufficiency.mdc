@@ -1,0 +1,170 @@
+---
+description: Every aap-demo-* artifact must be fully self-sufficient — all supporting infrastructure and tools the demo depends on must be provisioned and configured by Ansible playbooks included in the artifact itself.
+alwaysApply: false
+globs: artifacts/demos/**
+---
+
+# Demo self-sufficiency
+
+A demo is **self-sufficient** when someone with valid credentials can clone the
+repository and bring the entire demo environment — including every external tool
+or platform the scenario depends on — to a running state using only Ansible.
+No manual setup steps outside of Ansible are acceptable.
+
+## What counts as a supporting dependency
+
+Any resource that the demo requires but does not already exist in a
+freshly-provisioned AAP environment is a **supporting dependency**.
+Typical categories:
+
+| Category | Examples |
+|---|---|
+| Cloud virtual machines | VMs or EC2 instances |
+| Cloud networking | VPC, VNet, subnets, internet gateways, route tables, security groups, NSGs |
+| Cloud IAM and identity | IAM roles, instance profiles, service roles, service principals, managed identities |
+| Cloud-native automation primitives | SSM Documents, Automation Account Runbooks, Lambda functions |
+| Third-party services | Secret management servers, certificate authorities, ITSM instances |
+| Target host state | Packages installed, services running, known-good configuration applied |
+| Supporting infrastructure | Container registries, Git servers, monitoring endpoints |
+
+> **Note:** Cloud networking and IAM resources are listed as separate categories
+> because they are frequently overlooked. A setup playbook that creates an EC2
+> instance is not complete if it still assumes a VPC, subnet, security group, or
+> IAM instance profile already exists.
+
+## Required artifacts for each supporting dependency
+
+For every dependency identified in the demo:
+
+1. **Setup playbook(s)** in `playbooks/setup/` (numbered `01_`, `02_`, …
+   when order matters) or under `playbooks/demo/` when the setup is
+   tightly coupled to the scenario.
+   - Must install, configure, and validate the dependency **end-to-end**, including
+     all cloud networking and IAM prerequisites it relies on.
+   - Must be idempotent and safe to re-run.
+
+2. **Corresponding AAP job template(s)** in `group_vars/all/job_templates.yml`
+   so operators can run them from the Controller UI.
+
+3. **A setup workflow** (or an extended `WF - Demo setup` node) in
+   `group_vars/all/workflow_templates.yml` that sequences:
+   `environment setup → dependency configuration → demo scenario → teardown`.
+
+4. **A teardown counterpart** — every setup playbook must have a matching
+   deprovision or uninstall playbook so the environment can be fully reset.
+
+5. **Documentation** in `docs/setup.md`:
+   - List each dependency with a one-line description.
+   - Reference the setup playbook and the corresponding job template.
+   - Describe any credentials or variables required.
+
+## Dual-mode pattern for cloud infrastructure dependencies
+
+Cloud networking and IAM resources (VPC, subnets, security groups, IAM roles,
+instance profiles, service roles) are a special case: in enterprise environments
+they are typically pre-provisioned and managed outside the demo; in greenfield or
+lab environments they may not exist at all.
+
+Every demo that depends on cloud networking or IAM resources **must** support
+both modes via a boolean flag in `demo_variables.yml.example`:
+
+```yaml
+# false (default): supply IDs for pre-existing resources.
+# true: setup playbook creates all networking/IAM objects from scratch.
+aws_create_network_resources: false   # AWS example
+azure_create_automation_account: false  # Azure example
+```
+
+### Required implementation for each dual-mode dependency
+
+1. **A boolean flag** in `demo_variables.yml.example` with a clear inline comment
+   explaining both values and which variables are relevant to each mode.
+
+2. **Conditional creation tasks** in the setup playbook gated on the flag:
+   ```yaml
+   when: aws_create_network_resources | default(false) | bool
+   ```
+
+3. **A resolve-facts task** that produces a single set of unified variables
+   consumed by downstream tasks, regardless of which mode is active:
+   ```yaml
+   - name: Resolve launch parameters from the active mode
+     ansible.builtin.set_fact:
+       ec2_launch_subnet_id: >-
+         {{ aws_subnet_result.subnet.id
+            if (aws_create_network_resources | default(false) | bool)
+            else aws_ec2_vpc_subnet_id }}
+   ```
+   This avoids duplicating the main task and makes the playbook mode-agnostic
+   after the resolution step.
+
+4. **Conditional teardown tasks** in the teardown counterpart that remove only
+   the objects the setup playbook created (i.e. skipped when bring-your-own).
+
+5. **Two sections in `demo_variables.yml.example`** clearly labelled
+   `Bring-your-own` and `Create-from-scratch`, each listing the variables that
+   apply to that mode.
+
+6. **`set_stats` output** for any IDs or ARNs computed during create-from-scratch
+   mode so they are available to downstream workflow nodes and printed in the
+   report task for the operator to copy into `demo_variables.yml`.
+
+### CHANGE_ME values as a red flag
+
+A `CHANGE_ME` placeholder for a cloud infrastructure ID (subnet ID, SG ID, IAM
+role ARN, account ID) without a corresponding `*_create_*` boolean flag is a
+**self-sufficiency gap**. Either:
+
+- Pair it with a `false`-default boolean flag and implement the create-from-scratch
+  path in the setup playbook, **or**
+- Replace it with a value that can be retrieved automatically (e.g. account ID
+  from STS, VPC ID from a previous task's register).
+
+## What is NOT acceptable
+
+- Instructions in `docs/setup.md` or `README.md` that tell the operator to
+  install or configure a tool manually (e.g. "install HashiCorp Vault by
+  following their official guide", "create the SSM Document in the AWS console",
+  "create the IAM role in the AWS console before running the playbook").
+- A setup playbook that creates a VM or cloud-native resource but assumes the
+  networking (VPC, subnet, SG) or IAM (role, instance profile, service role)
+  it depends on already exists, without providing a create-from-scratch path.
+- A demo workflow that assumes the supporting tool already exists without
+  providing the Ansible automation to create it.
+- A `playbooks/setup/` directory that is empty or contains only placeholder
+  comments.
+
+## Enforcement checklist
+
+When creating or reviewing an `aap-demo-*` artifact, verify:
+
+### Dependencies
+
+- [ ] `docs/setup.md` lists all supporting dependencies explicitly, including
+      cloud networking and IAM resources.
+- [ ] Each dependency has at least one playbook in `playbooks/setup/` or
+      `playbooks/demo/` that provisions or configures it **end-to-end** — including
+      any cloud networking and IAM prerequisites it requires.
+- [ ] Each setup playbook has a teardown counterpart.
+- [ ] Job templates exist in `group_vars/all/job_templates.yml` for every
+      setup and teardown playbook.
+- [ ] A setup workflow covers the full lifecycle: setup → demo → teardown.
+- [ ] No step in the `docs/` or `README.md` requires the operator to perform
+      a manual action outside of Ansible.
+
+### Dual-mode pattern (for every cloud networking or IAM dependency)
+
+- [ ] A boolean flag (`*_create_network_resources`, `*_create_automation_account`,
+      or similar) exists in `demo_variables.yml.example` with `false` as default.
+- [ ] The setup playbook conditionally creates the networking/IAM objects when the
+      flag is `true`, and validates that bring-your-own IDs are set when `false`.
+- [ ] A resolve-facts task unifies the outputs of both modes into a single set of
+      variables so downstream tasks are mode-agnostic.
+- [ ] The teardown counterpart removes only the objects created by the setup
+      playbook (skips pre-existing resources in bring-your-own mode).
+- [ ] `demo_variables.yml.example` has distinct `Bring-your-own` and
+      `Create-from-scratch` sections with clear labelling.
+- [ ] Every `CHANGE_ME` for an infrastructure ID is either paired with a
+      create-from-scratch flag or replaced with automatic retrieval (STS, etc.).
+- [ ] `set_stats` publishes computed IDs/ARNs so workflow chaining and the operator
+      report both reflect the resolved values.

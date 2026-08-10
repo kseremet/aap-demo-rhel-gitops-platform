@@ -1,0 +1,35 @@
+# Description: Remove the disposable RHEL GitOps VMs from OpenShift.
+---
+- name: Remove RHEL GitOps VMs
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  collections:
+    - kubevirt.core
+    - ansible.builtin
+  vars_files:
+    - ../../vault.yml
+    - ../../group_vars/all/demo_variables.yml
+    - ../../group_vars/all/vm_specs.yml
+
+  tasks:
+    - name: Require explicit destruction confirmation
+      ansible.builtin.assert:
+        that:
+          - demo_destroy_confirm | default(false) | bool
+        fail_msg: >-
+          VM deletion is destructive. Re-run with
+          -e demo_destroy_confirm=true.
+
+    - name: Delete KubeVirt VirtualMachines
+      kubevirt.core.kubevirt_vm:
+        name: "{{ item.value.vm_name }}"
+        namespace: "{{ openshift_vm_namespace }}"
+        state: absent
+        host: "{{ openshift_api_url }}"
+        api_key: "{{ vault_openshift_token }}"
+        validate_certs: "{{ openshift_validate_certs }}"
+        force: true
+      loop: "{{ vm_specs | dict2items }}"
+      loop_control:
+        label: "{{ item.value.vm_name }}"

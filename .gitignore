@@ -1,0 +1,14 @@
+vault.yml
+group_vars/all/demo_variables.yml
+ansible.cfg
+collections/ansible_collections/
+runtime/*
+!runtime/.gitkeep
+*.retry
+__pycache__/
+*.pyc
+.ansible/
+.venv/
+context/_build/
+context/files/
+context/context/

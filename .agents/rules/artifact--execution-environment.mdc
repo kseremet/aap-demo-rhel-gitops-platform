@@ -1,0 +1,165 @@
+---
+description: Standard Execution Environment pattern for aap-demo artifacts
+alwaysApply: false
+globs: artifacts/demos/**
+---
+
+# Execution Environment standards for `aap-demo-*` artifacts
+
+Apply these rules when creating or editing `context/execution-environment.yml`,
+`context/requirements.yml`, `group_vars/all/execution_environments.yml`, or
+any EE-related variables in `demo_variables.yml.example`.
+
+## `context/execution-environment.yml`
+
+### Required base image
+
+Always use `ee-supported-rhel9` (Python 3.12), not `ee-minimal-rhel9`:
+
+```yaml
+images:
+  base_image:
+    name: registry.redhat.io/ansible-automation-platform-27/ee-supported-rhel9:latest
+```
+
+### Required package manager override
+
+Both `ee-minimal-rhel9` and `ee-supported-rhel9` ship `microdnf`, not full `dnf`.
+Without this override the `ansible-builder` assemble script calls `/usr/bin/dnf`
+and fails:
+
+```yaml
+options:
+  package_manager_path: /usr/bin/microdnf
+```
+
+### Required Python version override
+
+Pin `PYCMD` to Python 3.12 in **both** `prepend_builder` and `prepend_final`.
+The assemble script (pip install of collection Python deps) runs in the BUILDER
+stage — all gcc and C headers must therefore be installed there, not in
+`prepend_final`:
+
+```yaml
+additional_build_steps:
+  prepend_builder:
+    - ENV PYCMD=/usr/bin/python3.12
+    - RUN microdnf install -y gcc krb5-devel systemd-devel dbus-devel glib2-devel python3.12-devel && microdnf clean all
+  prepend_final:
+    - ENV PYCMD=/usr/bin/python3.12
+```
+
+### ansible.cfg injection / removal
+
+Copy `ansible.cfg` into the build context so `ansible-galaxy` can authenticate
+to Automation Hub. Remove it from the final image to avoid shipping Hub tokens:
+
+```yaml
+additional_build_files:
+  - src: ../ansible.cfg
+    dest: configs
+
+additional_build_steps:
+  prepend_galaxy:
+    - COPY _build/configs/ansible.cfg /etc/ansible/ansible.cfg
+  append_final:
+    - RUN rm -f /etc/ansible/ansible.cfg
+```
+
+### Galaxy dependencies in a separate file
+
+Put collection dependencies in `context/requirements.yml`, not inline:
+
+```yaml
+dependencies:
+  galaxy: requirements.yml
+  python:
+    - boto3
+    - botocore
+    - azure-identity
+    - awscli   # see note below
+```
+
+### `awscli` must be installed via pip — NOT as a system RPM
+
+`awscli [platform:rpm]` does not exist in standard RHEL9 repositories. Using it
+causes a silent build failure where `aws` is missing at runtime. Always install
+via pip:
+
+```yaml
+# CORRECT
+python:
+  - awscli
+
+# WRONG — package not in RHEL9 repos, fails silently
+system:
+  - awscli [platform:rpm]
+```
+
+---
+
+## `group_vars/all/execution_environments.yml`
+
+Never hardcode the image URL. Use `demo_execution_environment_image` variable,
+`pull: missing`, and a `credential` for PAH authentication:
+
+```yaml
+controller_execution_environments:
+  - name: "{{ demo_execution_environment_name }}"
+    organization: "{{ demo_organization_name }}"
+    image: "{{ demo_execution_environment_image }}"
+    pull: missing
+    credential: "{{ hub_registry_credential_name }}"
+```
+
+---
+
+## `demo_variables.yml.example` — required EE variables
+
+**This rule is the source of truth for these three variables** — `artifact--demo-variables.mdc`
+cross-references this section instead of restating the values. Add them in the demo identity
+section, immediately after `demo_execution_environment_name`:
+
+```yaml
+demo_execution_environment_image: CHANGE_ME/ee-<slug>:latest
+hub_registry_credential_name: PAH Container Registry
+hub_registry_host: "{{ aap_hostname | regex_replace('^https?://', '') | regex_replace('/$', '') }}"
+```
+
+---
+
+## `credentials.yml` — required PAH registry credential
+
+Add this credential so Controller can pull the EE image from PAH:
+
+```yaml
+  - name: "{{ hub_registry_credential_name }}"
+    organization: "{{ demo_organization_name }}"
+    credential_type: Container Registry
+    inputs:
+      host: "{{ hub_registry_host }}"
+      username: "{{ aap_username }}"
+      password: "{{ aap_password }}"
+      verify_ssl: false
+    no_log: "{{ demo_no_log | default(true) }}"
+```
+
+---
+
+## `docs/setup.md` — required build instructions
+
+Step 3 must include login, build, and push with `--tls-verify=false`:
+
+```bash
+ansible-builder build \
+  -f context/execution-environment.yml \
+  -t <PAH-HOST>/ee-<slug>:latest \
+  --container-runtime podman
+
+podman login <PAH-HOST> --tls-verify=false
+
+podman push <PAH-HOST>/ee-<slug>:latest --tls-verify=false
+```
+
+Set `demo_execution_environment_image: <PAH-HOST>/ee-<slug>:latest` in
+`demo_variables.yml` before running `aap_config.yml`.

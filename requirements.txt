@@ -1,0 +1,4 @@
+# Python SDKs used by kubernetes.core and kubevirt.core for local execution.
+ansible-core>=2.18,<2.20
+kubernetes>=28.1.0
+openshift>=0.13.2

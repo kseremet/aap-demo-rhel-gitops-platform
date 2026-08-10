@@ -1,0 +1,26 @@
+---
+description: Enables user-defined custom rules via the custom-- prefix convention. Custom rules are gitignored and local to each user.
+alwaysApply: true
+---
+
+# Custom rules
+
+Users may create personal rules by adding `.mdc` files with a **`custom--`** prefix to `.agents/rules/` (e.g., `custom--my-style.mdc`). Cursor loads them natively alongside the built-in rules; OpenCode picks them up similarly, via the `opencode-cursor-rules` plugin specified in `opencode.json`.
+
+## Semantics
+
+- Custom rules carry **equal authority** to built-in rules.
+- On conflict, **custom rules win** (they express explicit user intent).
+- Custom rules are **gitignored** — they are personal and never committed to the repository.
+
+## Creating a custom rule
+
+Copy the provided template and rename it:
+
+```
+cp .agents/rules/custom--example.mdc.example .agents/rules/custom--<topic>.mdc
+```
+
+Set `alwaysApply: true` or a `globs` pattern in the YAML frontmatter, then write the rule body.
+
+See [`docs/rules.md`](../../docs/rules.md) for the full rule system reference.

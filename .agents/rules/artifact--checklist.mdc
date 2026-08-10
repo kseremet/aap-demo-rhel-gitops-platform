@@ -1,0 +1,26 @@
+---
+description: Pre-handoff checklist for AAP demo artifacts. References the modular artifact--* rules. Part of the artifact--* rule set.
+alwaysApply: false
+globs: artifacts/demos/**
+---
+
+# Checklist before hand-off
+
+- [ ] Repository root is named **`aap-demo-<meaningful-slug>`** (or you have documented the equivalent layout for your environment)
+- [ ] CasC; **`infra.aap_configuration`**; sensible **`group_vars/all/`** split — per **`artifact--casc.mdc`**
+- [ ] **`aap_config.yml`** / **`aap_cleanup.yml`** follow the standard structure, deletion order, and confirmation pattern — per **`artifact--casc-playbooks.mdc`**
+- [ ] **`collections/requirements.yml`** and **`ansible.cfg.example`** with `collections_path` (or equivalent) for **`collections/`**; **README** documents collection install, Ansible config layout, secrets versus **`*.example`** files, and ordered **`playbooks/setup/`** naming when applicable — per **`artifact--layout.mdc`**
+- [ ] README and **`docs/`** follow **`all--english-content.mdc`**; no emoji, strong structure, cross-links, tables, ASCII diagrams as needed — per **`artifact--readme.mdc`**
+- [ ] README's first badge is the `Status` badge (`WIP` or `Ready`) — per **`artifact--status-badge.mdc`**
+- [ ] FQCN, explicit `collections:` on plays, tags, handlers, vault, **`verify.yml`**, **`docs/setup.md`** — per **`artifact--ansible-quality.mdc`**
+- [ ] **Roles** (if any): init under **`roles/<role-name>/`**; **`tasks/main.yml`** as entry with included task files; documented **`defaults/`**; internal constants in **`vars/`**; **`meta/main.yml`** with dependencies; secrets only via vault — per **`artifact--roles.mdc`**
+- [ ] **`artifact--code-comments.mdc`** standards applied; playbooks and tasks documented per that rule
+- [ ] Every supporting dependency has setup/teardown playbooks, job templates, and a dual-mode flag where applicable — per **`artifact--self-sufficiency.mdc`**
+- [ ] If the artifact provisions and tears down infrastructure, a `demo_manage_infrastructure` flag gates the CasC infra objects, with mode-aware variable/secret banners (in both `demo_variables.yml.example` and `vault.yml.example`) and assertions — per **`artifact--demo-deployment-modes.mdc`**
+- [ ] **`docs/testing.md`** exists and its status summary reflects the current tested state — per **`artifact--testing-log.mdc`**
+- [ ] **`vault.yml.example`** follows the standard naming, structure, and content-split rules — per **`artifact--vault-naming.mdc`**
+- [ ] **`demo_variables.yml.example`** follows the standard section order and prefix conventions — per **`artifact--demo-variables.mdc`**
+- [ ] The Git repository configuration block follows the standard shape — per **`artifact--git-repository.mdc`**
+- [ ] Custom Execution Environment (if in scope) follows the standard build/CasC/credential pattern — per **`artifact--execution-environment.mdc`**
+- [ ] All **`artifact--*`** and **`all--*`** rule files present in **`.agents/rules/`**
+- [ ] Cross-tool rule wiring present — per **`artifact--layout.mdc`**'s **Cross-tool rule wiring** section: `.cursor/rules` symlinked to `.agents/rules`, and `opencode.json` at the artifact root.

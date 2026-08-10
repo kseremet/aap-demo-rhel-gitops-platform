@@ -1,0 +1,48 @@
+---
+description: Standard Git repository block for aap-demo demo_variables (GitHub, Gitea, GitLab)
+alwaysApply: false
+globs: artifacts/demos/**
+---
+
+# Demo Git repository configuration
+
+When creating or editing `group_vars/all/demo_variables.yml.example`, `group_vars/all/demo_variables.yml`, or scaffolding a new `aap-demo-*` artifact, **always** include the Git repository section in this exact shape.
+
+Do **not** use computed URLs (`demo_project_scm_platform`, Jinja conditionals, or owner/host variables). Use commented platform options and a single placeholder URL.
+
+## Required block
+
+Replace `<artifact-repo-name>` with the artifact directory name (for example `aap-demo-<slug>`).
+
+```yaml
+# ============================================================================
+# Git repository configuration
+# ============================================================================
+# Choose ONE of the following options based on your Git hosting platform:
+#
+# OPTION A: GitHub
+#   demo_project_scm_url: https://github.com/YOUR_USERNAME/<artifact-repo-name>.git
+#
+# OPTION B: Gitea (self-hosted)
+#   demo_project_scm_url: https://your-gitea.example.com/YOUR_USERNAME/<artifact-repo-name>.git
+#
+# OPTION C: GitLab
+#   demo_project_scm_url: https://gitlab.com/YOUR_USERNAME/<artifact-repo-name>.git
+# ============================================================================
+
+demo_project_scm_url: CHANGE_ME_GIT_REPO_URL
+demo_project_scm_branch: main
+```
+
+## Rules
+
+- Keep **one** active `demo_project_scm_url` line with value `CHANGE_ME_GIT_REPO_URL` in `.example` files; the user uncomments or replaces it in their local `demo_variables.yml`.
+- Use `YOUR_USERNAME` in commented examples (not `YOUR_ORG`), unless the demo explicitly targets org-owned repos only.
+- Default branch is `main`; change only when the demo repository uses another default branch.
+- `projects.yml` (and EDA project vars, if any) must reference `"{{ demo_project_scm_url }}"` and `"{{ demo_project_scm_branch }}"` — do not hardcode URLs in CasC project definitions.
+- When documenting setup in `README.md` or `docs/setup.md`, point users to this block; do not introduce alternate SCM variable schemes.
+
+## Out of scope
+
+- Source-control **credentials** for private repos (define separately in `credentials.yml` when needed).
+- Self-managed GitLab hostnames: document them as a commented variant under OPTION C, for example `https://gitlab.example.com/YOUR_USERNAME/<artifact-repo-name>.git`.

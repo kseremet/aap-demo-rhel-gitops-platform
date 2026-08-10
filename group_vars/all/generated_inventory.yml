@@ -1,0 +1,49 @@
+---
+# Generated platform data consumed by AAP CasC.
+controller_hosts:
+  - name: web-01
+    inventory: "RHEL Fleet"
+    variables:
+      ansible_host: 10.130.1.98
+      ansible_user: cloud-user
+      ansible_become: true
+      ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+    state: present
+  - name: web-02
+    inventory: "RHEL Fleet"
+    variables:
+      ansible_host: 10.130.1.99
+      ansible_user: cloud-user
+      ansible_become: true
+      ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+    state: present
+  - name: db-01
+    inventory: "RHEL Fleet"
+    variables:
+      ansible_host: 10.130.1.101
+      ansible_user: cloud-user
+      ansible_become: true
+      ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+    state: present
+  - name: app-01
+    inventory: "RHEL Fleet"
+    variables:
+      ansible_host: 10.130.1.100
+      ansible_user: cloud-user
+      ansible_become: true
+      ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+    state: present
+
+controller_groups:
+  - name: web_servers
+    inventory: "RHEL Fleet"
+    hosts: ["web-01", "web-02"]
+    state: present
+  - name: database_servers
+    inventory: "RHEL Fleet"
+    hosts: ["db-01"]
+    state: present
+  - name: app_servers
+    inventory: "RHEL Fleet"
+    hosts: ["app-01"]
+    state: present

@@ -1,0 +1,14 @@
+---
+version: 3
+
+dependencies:
+  galaxy:
+    collections:
+      - name: infra.aap_configuration
+      - name: ansible.controller
+      - name: kubevirt.core
+      - name: kubernetes.core
+      - name: community.crypto
+  python:
+    - kubernetes>=28.1.0
+    - openshift>=0.13.2

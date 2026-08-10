@@ -1,0 +1,33 @@
+# Description: Generate the runtime SSH keypair used by VM cloud-init and AAP.
+---
+- name: Generate RHEL GitOps runtime SSH key
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  collections:
+    - community.crypto
+    - ansible.builtin
+  vars_files:
+    - ../../group_vars/all/demo_variables.yml
+  vars:
+    _ssh_key_path: "{{ playbook_dir }}/../../{{ demo_ssh_private_key_file }}"
+
+  tasks:
+    - name: Ensure runtime directory exists
+      ansible.builtin.file:
+        path: "{{ _ssh_key_path | dirname }}"
+        state: directory
+        mode: "0700"
+
+    - name: Generate ED25519 SSH keypair
+      community.crypto.openssh_keypair:
+        path: "{{ _ssh_key_path }}"
+        type: ed25519
+        comment: rhel-gitops-platform
+        mode: "0600"
+
+    - name: Report generated key location
+      ansible.builtin.debug:
+        msg: >-
+          Runtime key generated at {{ _ssh_key_path }}. The private
+          key is ignored and will be imported into the AAP Machine Credential.

@@ -1,0 +1,41 @@
+---
+description: Enforces a Status badge as the first badge in every aap-demo-* README
+alwaysApply: false
+globs: artifacts/demos/**
+---
+
+# Demo status badge
+
+Every `README.md` under `artifacts/demos/aap-demo-*/` **must** include a `Status` badge as the **first** badge in the badge row (before AAP, CasC, platform, or any other badge).
+
+## Required values
+
+| State | Badge Markdown | When to use |
+|---|---|---|
+| Work in progress | `![Status](https://img.shields.io/badge/Status-WIP-yellow)` | Demo is incomplete, untested, or not yet validated end-to-end |
+| Ready | `![Status](https://img.shields.io/badge/Status-Ready-brightgreen)` | Demo has been tested and is ready to run live with a customer |
+
+## Placement rule
+
+The Status badge must appear on the **first badge line**, before any other badge:
+
+```markdown
+![Status](https://img.shields.io/badge/Status-WIP-yellow)
+![Red Hat AAP](https://img.shields.io/badge/AAP-2.7+-red)
+![CasC](https://img.shields.io/badge/CasC-infra.aap__configuration-blue)
+```
+
+Do **not** place the Status badge after other badges or on a separate line.
+
+## Rules
+
+- Default state for new demos is **WIP**. Change to **Ready** only when the demo has been validated end-to-end.
+- The badge label is always `Status` (no spaces, no alternate capitalization).
+- Use only the two states above; do not introduce intermediate states (e.g. `Beta`, `Testing`).
+- When creating or scaffolding a new `aap-demo-*` artifact, always insert the WIP badge as the first line of the badge block.
+- When a demo is declared ready for live delivery, update the badge to `Ready`; do not remove it.
+
+## Out of scope
+
+- Non-demo artifacts (labs, workshops, scripts) — this badge is not required outside `artifacts/demos/aap-demo-*/`.
+- The shields.io style parameter — use the default style (no `?style=` suffix).

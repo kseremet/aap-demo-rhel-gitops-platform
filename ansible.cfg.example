@@ -1,0 +1,22 @@
+[defaults]
+inventory = environments/lab/inventory.yml
+collections_path = collections
+interpreter_python = auto_silent
+host_key_checking = false
+retry_files_save_path = /tmp
+forks = 5
+timeout = 30
+deprecation_warnings = false
+
+#DO NOT forget to set ANSIBLE_GALAXY_SERVER_AUTOMATION_HUB_TOKEN with a valid token to install collections from automation hub.
+
+[galaxy]
+server_list = automation_hub, release_galaxy
+
+[galaxy_server.automation_hub]
+url = https://console.redhat.com/api/automation-hub/content/published/
+auth_url = https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token
+
+
+[galaxy_server.release_galaxy]
+url = https://galaxy.ansible.com/

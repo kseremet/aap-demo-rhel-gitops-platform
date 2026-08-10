@@ -1,0 +1,21 @@
+---
+# Generated platform data consumed by AAP CasC.
+controller_hosts:
+{% for host in discovered_hosts %}
+  - name: {{ host.name }}
+    inventory: "{{ demo_inventory_name }}"
+    variables:
+      ansible_host: {{ host.ansible_host }}
+      ansible_user: cloud-user
+      ansible_become: true
+      ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+    state: present
+{% endfor %}
+
+controller_groups:
+{% for group in discovered_groups %}
+  - name: {{ group.name }}
+    inventory: "{{ demo_inventory_name }}"
+    hosts: {{ group.hosts | to_json }}
+    state: present
+{% endfor %}

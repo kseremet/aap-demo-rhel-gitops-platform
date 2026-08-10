@@ -1,0 +1,9 @@
+---
+# Copy to vault.yml and encrypt with ansible-vault.
+
+vault_openshift_token: CHANGE_ME
+vault_aap_token: CHANGE_ME
+# Optional for separate AAP jobs. For the one-shot bootstrap, the generated
+# runtime/demo_key file is used instead. If set, provide the complete private
+# key value as a Vault multiline string.
+vault_demo_ssh_private_key: CHANGE_ME

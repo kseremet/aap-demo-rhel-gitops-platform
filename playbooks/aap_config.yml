@@ -1,0 +1,47 @@
+# Description: Configure AAP objects for the platform and GitOps repositories.
+---
+- name: Configure RHEL GitOps AAP objects
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  collections:
+    - infra.aap_configuration
+    - ansible.builtin
+  vars_files:
+    - ../vault.yml
+    - ../group_vars/all/demo_variables.yml
+    - ../group_vars/all/casc.yml
+    - ../group_vars/all/generated_inventory.yml
+
+  pre_tasks:
+    - name: Resolve project-root SSH key path
+      ansible.builtin.set_fact:
+        demo_ssh_private_key_path: "{{ playbook_dir }}/../{{ demo_ssh_private_key_file }}"
+
+    - name: Validate bootstrap inputs
+      ansible.builtin.assert:
+        that:
+          - aap_hostname is defined
+          - aap_hostname != 'CHANGE_ME_AAP_URL'
+          - vault_aap_token is defined
+          - demo_state_scm_url != 'CHANGE_ME_GIT_REPO_URL'
+          - demo_platform_scm_url != 'CHANGE_ME_PLATFORM_REPO_URL'
+          - controller_hosts | length > 0
+          - >-
+            (vault_demo_ssh_private_key is defined
+             and vault_demo_ssh_private_key not in ['', 'CHANGE_ME'])
+            or (demo_ssh_private_key_path is file)
+        fail_msg: >-
+          Run VM discovery first and configure AAP, SCM, and SSH key values
+          before applying CasC. Provide a real vault_demo_ssh_private_key or
+          keep the generated key at {{ demo_ssh_private_key_path }}.
+
+    - name: Set AAP authentication variables
+      ansible.builtin.set_fact:
+        aap_token: "{{ vault_aap_token }}"
+
+  roles:
+    # NOTE: infra.aap_configuration is validated content.
+    - role: infra.aap_configuration.dispatch
+      tags:
+        - aap

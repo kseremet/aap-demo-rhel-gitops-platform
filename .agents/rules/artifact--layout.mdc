@@ -1,0 +1,111 @@
+---
+description: Baseline directory structure for AAP demo artifacts. Part of the artifact--* rule set.
+alwaysApply: false
+globs: artifacts/demos/**
+---
+
+# Directory layout (baseline)
+
+Adapt subfolders under `playbooks/`, `vars/`, `rulebooks/`, `templates/`, and `files/` to the scenario, but keep this spine:
+
+```
+aap-demo-<slug>/
+├── ansible.cfg.example
+├── inventory.yml
+├── vault.yml.example
+├── README.md
+├── .gitignore                         # must include entries below
+├── opencode.json                      # wires .agents/rules/*.mdc into OpenCode's instructions
+├── .agents/rules/
+│   ├── artifact--casc.mdc              # CasC standards (alwaysApply true)
+│   ├── artifact--casc-playbooks.mdc    # aap_config/aap_cleanup recipe (alwaysApply true)
+│   ├── artifact--layout.mdc            # directory layout (alwaysApply true)
+│   ├── artifact--ansible-quality.mdc   # Ansible/YAML quality (alwaysApply true)
+│   ├── artifact--roles.mdc             # role standards (alwaysApply true)
+│   ├── artifact--readme.mdc            # README style (alwaysApply true)
+│   ├── artifact--status-badge.mdc      # Status badge as first README badge (alwaysApply true)
+│   ├── artifact--code-comments.mdc     # playbook/task/CasC comments (alwaysApply true)
+│   ├── artifact--demo-deployment-modes.mdc # lab/dev vs customer/PoC mode flag (alwaysApply true)
+│   ├── artifact--checklist.mdc         # pre-handoff checklist (alwaysApply true)
+│   ├── artifact--self-sufficiency.mdc  # dependency/dual-mode standards (alwaysApply true)
+│   ├── artifact--testing-log.mdc       # docs/testing.md session workflow (alwaysApply true)
+│   ├── artifact--vault-naming.mdc      # vault.yml.example conventions (alwaysApply true)
+│   ├── artifact--demo-variables.mdc    # demo_variables.yml.example conventions (alwaysApply true)
+│   ├── artifact--git-repository.mdc    # Git repository config block (alwaysApply true)
+│   ├── artifact--execution-environment.mdc # custom EE build/CasC pattern (alwaysApply true)
+│   ├── all--custom-rules.mdc           # custom-- prefix convention (alwaysApply true)
+│   ├── all--english-content.mdc        # English-only prose and comments (alwaysApply true)
+│   ├── all--skill-stop-enforcement.mdc # hard-stop enforcement (alwaysApply true)
+│   └── all--subagent-discipline.mdc    # subagent model/usage discipline (alwaysApply true)
+├── .cursor/rules -> .agents/rules/     # symlink, for Cursor rule discovery
+├── collections/
+│   └── requirements.yml
+├── group_vars/all/
+│   ├── demo_variables.yml.example
+│   ├── organizations.yml
+│   ├── projects.yml
+│   ├── credentials.yml
+│   ├── inventories.yml
+│   ├── job_templates.yml
+│   ├── workflow_templates.yml
+│   └── ...                            # further CasC files as needed
+├── vars/
+├── playbooks/
+│   ├── aap_config.yml
+│   ├── aap_cleanup.yml
+│   ├── site.yml                       # optional data-plane entry if needed
+│   ├── verify.yml                     # idempotency / smoke tests
+│   └── setup/                         # optional ordered setup (e.g. 01_..., 02_...)
+├── rulebooks/                         # only if EDA is in scope
+├── roles/                             # optional host automation
+├── context/
+│   └── execution-environment.yml      # optional: custom EE when cloud SDKs needed
+├── docs/
+│   ├── setup.md
+│   ├── procedures.md
+│   ├── verification.md
+│   └── testing.md                     # session-start status log, see artifact--testing-log.mdc
+├── templates/
+└── files/
+```
+
+## Cross-tool rule wiring
+
+`.agents/rules/` is the single source of truth for the artifact's standards. Do not fork rule bodies per tool:
+
+- **Cursor** only discovers *rules* from `.cursor/rules/` (it does read *skills* directly from `.agents/skills/`, but not rules). Symlink it: `ln -s ../.agents/rules .cursor/rules` (relative, so it survives the artifact being moved or exported).
+- **OpenCode** does not have a Cursor-style glob/alwaysApply rule engine; it loads plain instruction files instead. Ship a minimal `opencode.json` at the artifact root:
+
+  ```json
+  {
+    "$schema": "https://opencode.ai/config.json",
+    "plugin": [
+      "opencode-cursor-rules@1.0.1"
+    ]
+  }
+  ```
+
+  This loads every rule body into context on every session (OpenCode does not distinguish `alwaysApply` from `globs` — treat this as acceptable since all `artifact--*` copies use `alwaysApply: true`).
+
+## `.gitignore` baseline entries
+
+Every artifact **`.gitignore`** must include at least:
+
+```
+vault.yml
+group_vars/all/demo_variables.yml
+collections/ansible_collections/
+*.retry
+__pycache__/
+*.pyc
+ansible.cfg
+.ansible/
+```
+
+When the artifact includes a **`context/`** directory for Execution Environment builds, also add:
+
+```
+context/_build/
+context/files/
+context/context/
+```

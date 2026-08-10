@@ -1,0 +1,92 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: {{ vm_name }}
+  namespace: {{ vm_namespace }}
+  labels:
+    app: {{ vm_name }}
+    demo: rhel-gitops
+    role: {{ role }}
+spec:
+  dataVolumeTemplates:
+    - metadata:
+        name: {{ vm_name }}
+      spec:
+        sourceRef:
+          kind: DataSource
+          name: {{ datasource_name }}
+          namespace: {{ datasource_namespace }}
+        storage:
+          resources:
+            requests:
+              storage: {{ storage_size }}
+{% for disk in data_disks %}
+    - metadata:
+        name: {{ vm_name }}-{{ disk.name }}
+      spec:
+        source:
+          blank: {}
+        storage:
+          resources:
+            requests:
+              storage: {{ disk.size }}
+{% endfor %}
+  runStrategy: Always
+  template:
+    metadata:
+      labels:
+        app: {{ vm_name }}
+        demo: rhel-gitops
+        role: {{ role }}
+    spec:
+      domain:
+        cpu:
+          cores: {{ cpu_cores }}
+          sockets: 1
+          threads: 1
+        memory:
+          guest: {{ memory }}
+        devices:
+          disks:
+            - name: rootdisk
+              disk:
+                bus: virtio
+            - name: cloudinitdisk
+              disk:
+                bus: virtio
+{% for disk in data_disks %}
+            - name: {{ disk.name }}
+              disk:
+                bus: virtio
+              serial: {{ disk.serial }}
+{% endfor %}
+          interfaces:
+            - name: default
+              masquerade: {}
+            - name: nic2
+              bridge: {}
+        features:
+          smm:
+            enabled: true
+        firmware:
+          bootloader:
+            efi: {}
+      networks:
+        - name: default
+          pod: {}
+        - name: nic2
+          multus:
+            networkName: {{ multus_network }}
+      volumes:
+        - name: rootdisk
+          dataVolume:
+            name: {{ vm_name }}
+        - name: cloudinitdisk
+          cloudInitNoCloud:
+            userData: |
+{{ cloud_init_user_data | indent(width=14, first=True) }}
+{% for disk in data_disks %}
+        - name: {{ disk.name }}
+          dataVolume:
+            name: {{ vm_name }}-{{ disk.name }}
+{% endfor %}

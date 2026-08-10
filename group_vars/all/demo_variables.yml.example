@@ -1,0 +1,22 @@
+---
+# Platform and AAP bootstrap values. Copy to demo_variables.yml and edit.
+demo_organization_name: RHEL GitOps
+demo_state_project_name: rhel-gitops-state
+demo_platform_project_name: rhel-gitops-platform
+demo_inventory_name: RHEL Fleet
+demo_machine_credential_name: RHEL SSH Key
+demo_state_scm_url: CHANGE_ME_GIT_REPO_URL
+demo_state_scm_branch: main
+demo_platform_scm_url: CHANGE_ME_PLATFORM_REPO_URL
+demo_platform_scm_branch: main
+aap_hostname: CHANGE_ME_AAP_URL
+aap_validate_certs: false
+openshift_api_url: CHANGE_ME
+openshift_vm_namespace: CHANGE_ME
+openshift_validate_certs: false
+openshift_vm_datasource_name: rhel9
+openshift_vm_datasource_namespace: openshift-virtualization-os-images
+openshift_vm_storage_size: 30Gi
+openshift_vm_multus_network_name: default/localnet-vlan150
+demo_ssh_private_key_file: runtime/demo_key
+demo_ssh_key_name: demo_key

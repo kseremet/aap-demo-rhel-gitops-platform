@@ -1,0 +1,96 @@
+# Description: Discover VM management IPs and write platform-owned inventory.
+---
+- name: Discover RHEL GitOps VM inventory
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  collections:
+    - kubevirt.core
+    - ansible.builtin
+  vars_files:
+    - ../../vault.yml
+    - ../../group_vars/all/demo_variables.yml
+    - ../../group_vars/all/vm_specs.yml
+
+  vars:
+    _vm_list: "{{ vm_specs | dict2items }}"
+
+  tasks:
+    - name: Fetch VM interfaces and guest addresses
+      kubevirt.core.kubevirt_vmi_info:
+        name: "{{ item.value.vm_name }}"
+        namespace: "{{ openshift_vm_namespace }}"
+        host: "{{ openshift_api_url }}"
+        api_key: "{{ vault_openshift_token }}"
+        validate_certs: "{{ openshift_validate_certs }}"
+      register: vmis
+      no_log: true
+      until:
+        - vmis.resources | length > 0
+        - vmis.resources[0].status.phase | default('') == 'Running'
+        - >-
+          (vmis.resources[0].status.interfaces | default([])
+           | selectattr('name', 'equalto', 'default')
+           | selectattr('ipAddress', 'defined') | list | length) > 0
+      retries: 30
+      delay: 10
+      loop: "{{ _vm_list }}"
+      loop_control:
+        label: "{{ item.key }}"
+
+    - name: Build discovered host list
+      ansible.builtin.set_fact:
+        discovered_hosts: >-
+          {{ discovered_hosts | default([]) + [{
+            'name': item.item.key,
+            'ansible_host': (_interfaces | selectattr('name', 'equalto', 'default')
+              | selectattr('ipAddress', 'defined') | map(attribute='ipAddress') | first),
+            'management_mac': (_interfaces | selectattr('name', 'equalto', 'default')
+              | map(attribute='mac') | first | default('pending')),
+            'internal_ip': (_interfaces | selectattr('name', 'equalto', 'nic2')
+              | selectattr('ipAddress', 'defined') | map(attribute='ipAddress') | first
+              | default('pending')),
+            'internal_mac': (_interfaces | selectattr('name', 'equalto', 'nic2')
+              | map(attribute='mac') | first | default('pending'))
+          }] }}
+      vars:
+        _interfaces: "{{ item.resources[0].status.interfaces | default([]) }}"
+      loop: "{{ vmis.results }}"
+      loop_control:
+        label: "{{ item.item.key }}"
+
+    - name: Validate that every VM has a management address
+      ansible.builtin.assert:
+        that:
+          - discovered_hosts | default([]) | length == _vm_list | length
+        fail_msg: >-
+          One or more VMs do not expose a management IP. Wait for guest agents
+          and rerun discovery.
+
+    - name: Build discovered AAP groups
+      ansible.builtin.set_fact:
+        discovered_groups: "{{ discovered_groups | default([]) + [{'name': discovered_group, 'hosts': (vm_specs | dict2items | selectattr('value.group', 'equalto', discovered_group) | map(attribute='key') | list)}] }}"
+      loop: "{{ vm_specs | dict2items | map(attribute='value.group') | unique | list }}"
+      loop_control:
+        loop_var: discovered_group
+
+    - name: Write platform inventory and generated AAP inventory data
+      ansible.builtin.template:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        mode: "0644"
+      vars:
+        inventory_groups: "{{ vm_specs | dict2items | map(attribute='value.group') | unique | list }}"
+        inventory_group_hosts: "{{ dict(discovered_groups | map(attribute='name') | zip(discovered_groups | map(attribute='hosts'))) }}"
+        discovered_host_data: "{{ dict(discovered_hosts | map(attribute='name') | zip(discovered_hosts)) }}"
+        discovered_groups: "{{ discovered_groups }}"
+      loop:
+        - src: ../../templates/lab_inventory.yml.j2
+          dest: "{{ playbook_dir }}/../../environments/lab/inventory.yml"
+        - src: ../../templates/generated_aap_inventory.yml.j2
+          dest: "{{ playbook_dir }}/../../group_vars/all/generated_inventory.yml"
+
+    - name: Display discovered management addresses
+      ansible.builtin.debug:
+        msg: "{{ item.name }} -> {{ item.ansible_host }}"
+      loop: "{{ discovered_hosts }}"

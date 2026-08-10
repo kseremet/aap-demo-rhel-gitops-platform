@@ -1,0 +1,243 @@
+---
+description: Standard aap_config.yml and aap_cleanup.yml structure for AAP demo artifacts. Extends artifact--casc.mdc with the concrete playbook recipe.
+alwaysApply: false
+globs: artifacts/demos/**
+---
+
+# Demo CasC entry playbooks (`aap_config` / `aap_cleanup`)
+
+This rule is the concrete "how" for the two entry playbooks introduced in **`artifact--casc.mdc`**
+(the "why" — CasC as source of truth). When creating or editing `playbooks/aap_config.yml` or
+`playbooks/aap_cleanup.yml` in an `aap-demo-*` artifact, use the structure below as the default
+baseline, and incorporate the optional patterns when the demo needs them.
+
+Do **not** copy legacy noise by default: ASCII banner blocks, 5-second `pause`, emoji in messages, or `confirm_aap_delete=DELETE-AAP` (prefer `demo_cleanup_confirm=true`).
+
+## `playbooks/aap_config.yml`
+
+**Purpose:** Apply CasC via `infra.aap_configuration.dispatch`. Idempotent; safe to re-run.
+
+### Default structure (preferred)
+
+- File header: short `# Description:` block (purpose, prerequisites, idempotency).
+- Single play on `localhost`, `gather_facts: false`.
+- Collections: `infra.aap_configuration`, `ansible.builtin`.
+- `vars_files`: **`../vault.yml`** and **`../group_vars/all/demo_variables.yml`** (always load vault when CasC or post-tasks need secrets).
+- **One role:** `infra.aap_configuration.dispatch` with `# NOTE: validated content (not certified).`
+- Tag the dispatch role by resource type (`all`, `organizations`, `credentials`, `inventories`, `projects`, `execution_environments`, `labels`, `job_templates`, `workflow_job_templates`).
+- Keep all object definitions in `group_vars/all/*.yml`; do not embed CasC lists in the playbook.
+
+```yaml
+# Description: Apply AAP Configuration as Code for the <demo-slug> demo.
+# Run from the artifact root after copying demo_variables.yml.example and vault.yml.
+# Safe to re-run; infra.aap_configuration dispatch reconciles desired state.
+---
+- name: Apply <demo title> configuration to AAP
+  hosts: localhost
+  gather_facts: false
+  collections:
+    - infra.aap_configuration
+    - ansible.builtin
+  vars_files:
+    - ../vault.yml
+    - ../group_vars/all/demo_variables.yml
+  roles:
+    # NOTE: infra.aap_configuration is validated content (not certified).
+    - role: infra.aap_configuration.dispatch
+      tags:
+        - all
+        - organizations
+        - credentials
+        - inventories
+        - job_templates
+        - workflow_job_templates
+```
+
+Prefer `roles:` over `tasks: include_role` (older demos) unless you need pre/post tasks in the same play without a separate role file.
+
+### Optional `pre_tasks` (recommended for customer-facing demos)
+
+Fail fast before touching the API:
+
+```yaml
+  pre_tasks:
+    - name: Validate required variables
+      ansible.builtin.assert:
+        that:
+          - aap_hostname is defined
+          - aap_hostname != "CHANGE_ME"
+          - demo_project_scm_url is defined
+          - demo_project_scm_url != "CHANGE_ME_GIT_REPO_URL"
+          - aap_username is defined
+          - aap_password is defined
+        fail_msg: >-
+          Configure aap_hostname and demo_project_scm_url in demo_variables.yml
+          and controller credentials in vault.yml before running CasC.
+```
+
+Add demo-specific checks (`eda_hostname`, cloud IDs, target hosts) as needed. Use `CHANGE_ME` variants that match the example file placeholders.
+
+### Optional `pre_tasks` — conditional / merged CasC
+
+When the demo enables optional slices (cloud providers, feature flags):
+
+1. `include_vars` per slice with `when: enable_<slice>`.
+2. `set_fact` to **concatenate** base lists with slice lists (`controller_credentials`, `controller_inventories`, `controller_inventory_sources`, `controller_templates`, `controller_workflows`).
+3. Respect **create order**: child/source inventories must appear **before** constructed or parent inventories that reference them.
+
+### Optional `post_tasks` — after dispatch
+
+| Post-task | When to use |
+| --- | --- |
+| `ansible.controller.project_update` (`wait: true`) | Demo README expects templates/playbooks available immediately after CasC |
+| `ansible.controller.inventory` patch | Constructed inventory `input_inventories` must be wired **after** child inventories exist |
+| `ansible.controller.inventory_source_update` | Dynamic inventory sources need an initial sync on first deploy |
+
+Do not add post-tasks unless the demo documents them; default CasC-only playbooks stay minimal.
+
+### EDA scope
+
+When the demo includes Event-Driven Ansible, keep **`playbooks/eda_config.yml`** as a separate entry point (EDA dispatch or manual EDA modules). Mention the follow-up command in `aap_config` post-task debug or README — do not overload `aap_config.yml` unless the demo is Controller-only.
+
+---
+
+## `playbooks/aap_cleanup.yml`
+
+**Purpose:** Remove **only** objects this demo created. Destructive; requires explicit confirmation.
+
+### Default approach: explicit `ansible.controller` deletes
+
+- Single play: `hosts: localhost`, `connection: local`, `gather_facts: false`.
+- Collections: `ansible.controller`, `ansible.builtin`.
+- Same `vars_files` as `aap_config.yml`.
+- Reusable auth anchor (prefer `controller_host` / `validate_certs`, not legacy `controller_hostname`):
+
+```yaml
+  vars:
+    controller_auth: &controller_auth
+      controller_host: "https://{{ aap_hostname }}"
+      controller_username: "{{ aap_username }}"
+      controller_password: "{{ aap_password }}"
+      validate_certs: "{{ aap_validate_certs }}"
+```
+
+- **Confirmation** in `pre_tasks` (tag `always`):
+
+```yaml
+  pre_tasks:
+    - name: Require demo_cleanup_confirm=true before removing AAP objects
+      ansible.builtin.assert:
+        that:
+          - demo_cleanup_confirm | default(false) | bool
+        fail_msg: >-
+          Refusing to run cleanup. Pass -e demo_cleanup_confirm=true to
+          remove demo organizations, projects, templates, and inventories.
+      tags:
+        - always
+```
+
+Run command to document:
+
+```bash
+ansible-playbook playbooks/aap_cleanup.yml -e demo_cleanup_confirm=true --vault-id @prompt
+```
+
+### NEVER use dispatch with `platform_state: absent` when labels are defined
+
+**`ansible.controller.label` does not support `state: absent`.** If the demo defines
+`controller_labels` in `group_vars/all/labels.yml`, dispatch with `platform_state: absent`
+will crash with:
+
+```
+value of state must be one of: present, exists, got: absent
+```
+
+**The explicit `ansible.controller` approach (above) is always the safe default.** Use
+dispatch absent only for demos that have **zero** label definitions — which in practice
+means almost never, since labels are standard in every demo scaffold.
+
+### Alternative approach: dispatch cleanup
+
+Kept for reference. Only valid when the demo has **no** `controller_labels` defined,
+no custom credential types, no manual post-CasC objects, and no EDA on Controller.
+
+```yaml
+---
+- name: Confirm demo cleanup
+  hosts: localhost
+  gather_facts: false
+  collections:
+    - ansible.builtin
+  tasks:
+    - name: Require demo_cleanup_confirm=true before removing AAP objects
+      ansible.builtin.assert:
+        that:
+          - demo_cleanup_confirm | default(false) | bool
+        fail_msg: Pass -e demo_cleanup_confirm=true to run cleanup.
+      tags:
+        - always
+
+- name: Remove demo configuration from AAP
+  hosts: localhost
+  gather_facts: false
+  collections:
+    - infra.aap_configuration
+    - ansible.builtin
+  vars_files:
+    - ../vault.yml
+    - ../group_vars/all/demo_variables.yml
+  vars:
+    platform_state: absent
+  roles:
+    - role: infra.aap_configuration.dispatch
+```
+
+Pick **one** cleanup strategy per demo; do not mix dispatch absent with manual deletes for the same objects.
+
+### Deletion order (explicit cleanup)
+
+Number sections `# --- N. ... ---`. Every delete: `state: absent`, `ignore_errors: true`, `<<: *controller_auth`, resource-type tag.
+
+| Step | Resource | Module | Notes |
+| --- | --- | --- | --- |
+| 1 | Workflow job templates | `ansible.controller.workflow_job_template` | |
+| 2 | Job templates | `ansible.controller.job_template` | Include **legacy names** in the loop if templates were renamed |
+| 3 | Inventory sources | `ansible.controller.inventory_source` | **Before** inventories |
+| 4 | Inventories (children, then parents) | `ansible.controller.inventory` | Delete constructed/parent inventories after children |
+| 5 | Project | `ansible.controller.project` | |
+| 6 | Credentials | `ansible.controller.credential` | Loop `{name, type}`; include Hub/registry creds when created |
+| 7 | Custom credential types | `ansible.controller.credential_type` | After credentials that reference them |
+| 8 | Execution environments | `ansible.controller.execution_environment` | |
+| 9 | Users / teams | `ansible.controller.user` / `.team` | When demo CasC creates RBAC objects |
+| 10 | Labels | **Skip** — debug task only | No direct delete API |
+| last | Organization | `ansible.controller.organization` | |
+
+**Labels skip task (required):**
+
+```yaml
+    - name: Labels will be removed with the organization
+      ansible.builtin.debug:
+        msg: "Skipping labels — no direct delete API; removed with organization."
+      tags:
+        - labels
+```
+
+**Post-task:** short debug summary with re-deploy command (`aap_config.yml`). If EDA objects exist, point to **`playbooks/eda_cleanup.yml`** instead of deleting EDA from `aap_cleanup.yml` (EDA drift-detection pattern).
+
+### EDA cleanup
+
+Use a dedicated **`playbooks/eda_cleanup.yml`** with its own confirmation extra var (e.g. `confirm_eda_delete=DELETE-EDA` or align to `demo_cleanup_confirm` if you standardize later). Remove activations before projects/credentials. Reference it from Controller cleanup post-tasks and README.
+
+---
+
+## Cross-playbook consistency
+
+- Object names in cleanup must match `group_vars/all/` and job/workflow template names in CasC.
+- README **Quick start** → `aap_config.yml`; **Reset / teardown** → `aap_cleanup.yml` with confirmation extra var.
+- Do not omit `vault.yml` from `vars_files` when credentials or post-tasks need secrets.
+
+## Out of scope
+
+- Data-plane playbooks (`playbooks/demo/`, `site.yml`, `verify.yml`).
+- Cloud resource teardown playbooks (`playbooks/cleanup/`) — separate from AAP object cleanup.
+- Hub/gateway-only cleanup unless CasC creates those objects.

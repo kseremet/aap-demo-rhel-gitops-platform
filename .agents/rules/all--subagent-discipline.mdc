@@ -1,0 +1,40 @@
+---
+description: Keep subagents on the same model as the parent chat unless the user asks otherwise. Prevent wasteful subagent delegation for simple operations.
+alwaysApply: true
+---
+
+# When to use subagents
+
+- **Parallel independent work** across multiple files or directories (e.g., editing 4+ unrelated files simultaneously).
+- **Exploring a large, unfamiliar codebase** where the search scope is unclear and would consume excessive context.
+- **Chained workflows** where implementation should be reviewed in isolation.
+- **Heavy generation tasks** that benefit from a clean context window.
+
+## How to run subagents
+
+Subagents must use the **same model as the parent chat** unless the user explicitly requests a different model for a subagent.
+
+## Task tool (built-in subagents)
+
+When launching subagents with the Task tool:
+
+- **Do not** pass a `model` parameter — omit it so the subagent inherits the parent model.
+- **Do not** choose `composer-2.5-fast`, `composer-2-fast`, or other Composer Fast variants unless the user explicitly asks for them.
+- **Do not** upgrade subagents to a stronger model (for example Opus Max) unless the user explicitly asks.
+
+When the user asks for parallel subagents, apply the same rules to every launch in the batch.
+
+## User override
+
+If the user names a model for subagents in the current thread, follow that instruction for the rest of the thread.
+
+# When NOT to use subagents
+
+- **Reading files** — use the `read` tool directly. Never delegate a file read to a scout just to get its contents.
+- **Running a single shell command** — use `bash` directly.
+- **Making a single file edit** — use `edit` directly.
+- **Any task that takes one tool call** — do it yourself.
+
+## Rule of thumb
+
+If you can accomplish the task with direct tool calls in fewer round-trips than it takes to spin up subagents, do it directly. Subagents have overhead — use them only when the isolation or parallelism pays for itself.

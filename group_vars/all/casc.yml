@@ -1,0 +1,66 @@
+---
+aap_organizations:
+  - name: "{{ demo_organization_name }}"
+    description: RHEL GitOps event demonstration
+
+controller_credentials:
+  - name: "{{ demo_machine_credential_name }}"
+    organization: "{{ demo_organization_name }}"
+    credential_type: Machine
+    inputs:
+      username: cloud-user
+      ssh_key_data: >-
+        {{ vault_demo_ssh_private_key
+           if vault_demo_ssh_private_key is defined
+              and vault_demo_ssh_private_key not in ['', 'CHANGE_ME']
+           else lookup('ansible.builtin.file', demo_ssh_private_key_path) }}
+    no_log: true
+
+controller_inventories:
+  - name: "{{ demo_inventory_name }}"
+    organization: "{{ demo_organization_name }}"
+    variables:
+      ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+
+controller_projects:
+  - name: "{{ demo_state_project_name }}"
+    organization: "{{ demo_organization_name }}"
+    scm_type: git
+    scm_url: "{{ demo_state_scm_url }}"
+    scm_branch: "{{ demo_state_scm_branch }}"
+    scm_update_on_launch: true
+  - name: "{{ demo_platform_project_name }}"
+    organization: "{{ demo_organization_name }}"
+    scm_type: git
+    scm_url: "{{ demo_platform_scm_url }}"
+    scm_branch: "{{ demo_platform_scm_branch }}"
+    scm_update_on_launch: true
+
+controller_templates:
+  - name: JT - RHEL GitOps Reconciliation
+    organization: "{{ demo_organization_name }}"
+    job_type: run
+    inventory: "{{ demo_inventory_name }}"
+    project: "{{ demo_state_project_name }}"
+    playbook: site.yml
+    credentials:
+      - "{{ demo_machine_credential_name }}"
+  - name: JT - RHEL GitOps Provision VMs
+    organization: "{{ demo_organization_name }}"
+    job_type: run
+    inventory: "{{ demo_inventory_name }}"
+    project: "{{ demo_platform_project_name }}"
+    playbook: playbooks/setup/02_provision_vms.yml
+  - name: JT - RHEL GitOps Discover Inventory
+    organization: "{{ demo_organization_name }}"
+    job_type: run
+    inventory: "{{ demo_inventory_name }}"
+    project: "{{ demo_platform_project_name }}"
+    playbook: playbooks/setup/03_discover_inventory.yml
+  - name: JT - RHEL GitOps Remove VMs
+    organization: "{{ demo_organization_name }}"
+    job_type: run
+    inventory: "{{ demo_inventory_name }}"
+    project: "{{ demo_platform_project_name }}"
+    playbook: playbooks/cleanup/01_remove_vms.yml
+    survey_enabled: true
