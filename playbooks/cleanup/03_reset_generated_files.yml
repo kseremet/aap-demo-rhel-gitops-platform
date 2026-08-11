@@ -20,6 +20,11 @@
         dest: "{{ playbook_dir }}/../../group_vars/all/generated_inventory.yml"
         mode: "0644"
 
+    - name: Remove discovered facts snapshot
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/../../environments/lab/discovered_facts.yml"
+        state: absent
+
     - name: Remove runtime SSH private key
       ansible.builtin.file:
         path: "{{ playbook_dir }}/../../runtime/demo_key"

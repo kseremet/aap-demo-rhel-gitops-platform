@@ -1,0 +1,73 @@
+# Description: Populate host_vars MAC placeholders from discovered VM facts.
+# Reads environments/lab/discovered_facts.yml and replaces CHANGE_ME_*_MAC
+# placeholders in the sibling state repository's host_vars/*/network.yml files.
+# Run after discovery: ansible-playbook utils/populate_host_vars.yml
+---
+- name: Populate host_vars MAC placeholders from VM facts
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  collections:
+    - ansible.builtin
+
+  vars:
+    _facts_file: "{{ playbook_dir }}/../environments/lab/discovered_facts.yml"
+    _state_host_vars: "{{ playbook_dir }}/../../aap-demo-rhel-gitops-state/host_vars"
+
+  pre_tasks:
+    - name: Validate discovered facts file exists
+      ansible.builtin.stat:
+        path: "{{ _facts_file }}"
+      register: _facts_stat
+
+    - name: Require discovered facts
+      ansible.builtin.assert:
+        that:
+          - _facts_stat.stat.exists
+        fail_msg: >-
+          No discovered facts file at {{ _facts_file }}.
+          Run playbooks/setup/03_discover_inventory.yml first.
+
+    - name: Validate state repository host_vars exist
+      ansible.builtin.stat:
+        path: "{{ _state_host_vars }}"
+      register: _state_stat
+
+    - name: Require state repository
+      ansible.builtin.assert:
+        that:
+          - _state_stat.stat.exists and _state_stat.stat.isdir
+        fail_msg: >-
+          State repository host_vars not found at {{ _state_host_vars }}.
+          Check that the sibling aap-demo-rhel-gitops-state repository exists.
+
+    - name: Load discovered VM facts
+      ansible.builtin.include_vars:
+        file: "{{ _facts_file }}"
+
+    - name: Display facts to be applied
+      ansible.builtin.debug:
+        msg: >-
+          {{ item.name }}: management_mac={{ item.management_mac }}
+          internal_mac={{ item.internal_mac }}
+      loop: "{{ vm_facts }}"
+
+  tasks:
+    - name: Replace management MAC placeholder for each host
+      ansible.builtin.replace:
+        path: "{{ _state_host_vars }}/{{ item.name }}/network.yml"
+        regexp: 'CHANGE_ME_{{ item.name | upper | replace("-", "") }}_DHCP_MAC'
+        replace: '{{ item.management_mac }}'
+      loop: "{{ vm_facts }}"
+
+    - name: Replace internal MAC placeholder for each host
+      ansible.builtin.replace:
+        path: "{{ _state_host_vars }}/{{ item.name }}/network.yml"
+        regexp: 'CHANGE_ME_{{ item.name | upper | replace("-", "") }}_INTERNAL_MAC'
+        replace: '{{ item.internal_mac }}'
+      loop: "{{ vm_facts }}"
+
+    - name: Show updated host_vars network files
+      ansible.builtin.debug:
+        msg: "MAC placeholders replaced in host_vars/{{ item.name }}/network.yml"
+      loop: "{{ vm_facts }}"

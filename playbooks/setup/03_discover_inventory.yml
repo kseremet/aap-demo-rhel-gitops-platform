@@ -90,7 +90,13 @@
         - src: ../../templates/generated_aap_inventory.yml.j2
           dest: "{{ playbook_dir }}/../../group_vars/all/generated_inventory.yml"
 
+    - name: Persist discovered facts for host_vars population
+      ansible.builtin.copy:
+        content: "{{ {'vm_facts': discovered_hosts} | to_nice_yaml }}"
+        dest: "{{ playbook_dir }}/../../environments/lab/discovered_facts.yml"
+        mode: "0644"
+
     - name: Display discovered management addresses
       ansible.builtin.debug:
-        msg: "{{ item.name }} -> {{ item.ansible_host }}"
+        msg: "{{ item.name }} -> {{ item.ansible_host }} (management MAC: {{ item.management_mac }}, internal MAC: {{ item.internal_mac }})"
       loop: "{{ discovered_hosts }}"
