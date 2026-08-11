@@ -1,6 +1,7 @@
-![Status](https://img.shields.io/badge/Status-Scaffold-yellow)
+![Status](https://img.shields.io/badge/Status-Ready-green)
 ![Red Hat AAP](https://img.shields.io/badge/AAP-2.6%2B-red)
 ![OpenShift Virtualization](https://img.shields.io/badge/OpenShift%20Virtualization-KubeVirt-blue)
+![CasC](https://img.shields.io/badge/CasC-infra.aap__configuration-blue)
 
 # RHEL GitOps Platform Bootstrap
 
@@ -8,52 +9,39 @@
 
 This repository owns the platform side of the event demo **From Admin to
 Maintainer: Agentic Ops and GitOps for RHEL**. It creates the disposable RHEL
-lab, exposes the management inventory to administrators, and bootstraps AAP.
+lab on OpenShift Virtualization, exposes the management inventory to
+administrators, and bootstraps AAP with Configuration as Code.
 
 It is deliberately separate from the Git repository that contains RHEL desired
 state. This prevents VM recreation, generated IP addresses, SSH key generation,
 and AAP bootstrap changes from being mixed with human GitOps configuration
 commits.
 
-## Repository Boundary
+## Prerequisites
 
-| Concern | Owner |
+| Requirement | Details |
 |---|---|
-| KubeVirt VM lifecycle | This repository |
-| SSH key generation and AAP Machine Credential | This repository |
-| Discovered management IP inventory | This repository and AAP inventory |
-| AAP organizations, projects, credentials, and job templates | This repository |
-| RHEL System Role desired state | `aap-demo-rhel-gitops-state` |
-
-## Intended Flow
-
-```text
-Generate key -> Provision VMs -> Discover IPs -> Create AAP inventory
-     -> Create AAP Machine Credential -> Configure AAP
-     -> Reconcile rhel-gitops-state
-```
+| OpenShift | Cluster with KubeVirt / OpenShift Virtualization |
+| RHEL DataSource | `rhel9` in `openshift-virtualization-os-images` (or configure in variables) |
+| Multus network | Second NIC network (e.g. `default/localnet-vlan150`) |
+| AAP | Instance with admin access and PAT token |
+| Python | 3.9+ for the local virtual environment |
+| Git | Sibling clone of `aap-demo-rhel-gitops-state` |
 
 ## Quick Start
 
-This split is currently a scaffold. The commands below are the intended
-implementation and event order; setup and CasC playbooks are being added before
-the first end-to-end run.
-
-The platform repository is run before the state repository. Use a local clone
-for initial lab creation, or run the same playbooks as restricted AAP bootstrap
-job templates.
-
-### 1. Prepare local configuration
+### 1. Clone and configure
 
 ```bash
+git clone https://github.com/kseremet/aap-demo-rhel-gitops-platform.git
 cd aap-demo-rhel-gitops-platform
+
 cp ansible.cfg.example ansible.cfg
 cp group_vars/all/demo_variables.yml.example group_vars/all/demo_variables.yml
 cp vault.yml.example vault.yml
 ```
 
-Create and activate the project-local Python environment before running
-Ansible. This avoids modifying Homebrew's externally managed Python:
+### 2. Create the local Python environment
 
 ```bash
 python3 -m venv .venv
@@ -63,11 +51,22 @@ python -m pip install -r requirements.txt
 ansible-vault encrypt vault.yml
 ```
 
-Edit `group_vars/all/demo_variables.yml` and set the AAP URL, state repository
-URL, OpenShift API URL, namespace, and VM environment values. Edit `vault.yml`
-with the AAP and OpenShift secrets. Do not put the SSH private key in Git.
+### 3. Edit configuration files
 
-### 2. Install collections
+Edit `group_vars/all/demo_variables.yml`:
+- `demo_state_scm_url` — URL of the state repository
+- `demo_platform_scm_url` — URL of this platform repository
+- `aap_hostname` — AAP host (without `https://`)
+- `openshift_api_url` — OpenShift API URL
+- `openshift_vm_namespace` — namespace for the VMs
+- `openshift_vm_multus_network_name` — Multus network attachment
+
+Edit `vault.yml`:
+- `vault_openshift_token` — OpenShift API token
+- `vault_aap_token` — AAP PAT
+- `vault_demo_ssh_private_key` — optional, the bootstrap uses the runtime key by default
+
+### 4. Install collections
 
 ```bash
 ansible-galaxy collection install \
@@ -75,83 +74,64 @@ ansible-galaxy collection install \
   -p collections
 ```
 
-The collection installation provides Ansible modules; `requirements.txt`
-provides the Python SDKs those modules import. Ansible must use the same Python
-interpreter where these packages are installed. Check it with:
+### 5. Bootstrap the lab
 
-```bash
-ansible localhost -m ansible.builtin.setup -a 'filter=ansible_python*' -i environments/lab/inventory.yml
-```
-
-For AAP execution, build or select an Execution Environment using
-`context/execution-environment.yml`; installing collections alone does not add
-the Kubernetes Python SDK.
-
-### 3. Create the lab and bootstrap AAP
-
-For the shortest path, run the ordered bootstrap. It keeps the generated private
-key available through the entire local or AAP job execution, then imports it into
-the AAP Machine Credential before the job ends.
+One command creates the SSH key, provisions the VMs, discovers management
+addresses, and configures AAP:
 
 ```bash
 ansible-playbook playbooks/bootstrap.yml --vault-id @prompt
 ```
 
 The key is created under ignored `runtime/`. Its public half is injected into
-the VMs. The private half is used to create the AAP Machine Credential and is
-never committed. In AAP, run this as one restricted bootstrap job rather than as
-separate workflow nodes so the temporary key remains available.
+the VMs via cloud-init. The private half is imported into the AAP Machine
+Credential and discarded from the job workspace.
 
-For troubleshooting or demonstrations of each platform phase, run the ordered
-playbooks separately:
+### 6. Inspect the result
 
 ```bash
-ansible-playbook playbooks/setup/01_generate_keys.yml
-ansible-playbook playbooks/setup/02_provision_vms.yml --vault-id @prompt
-ansible-playbook playbooks/setup/03_discover_inventory.yml --vault-id @prompt
-ansible-playbook playbooks/aap_config.yml --vault-id @prompt
+ansible-inventory -i environments/lab/inventory.yml --graph
 ```
 
-When running the phases separately in AAP, provide
-`vault_demo_ssh_private_key` as an encrypted Vault value because AAP job
-workspaces are temporary.
+The discovery step also writes `environments/lab/discovered_facts.yml` with MAC
+addresses and IPs for every VM. This file is used by the pre-demo preparation
+step below.
 
-After discovery, inspect the addresses that will be shown to the audience:
+### 7. Pre-demo preparation
+
+Before the event, populate the state repository's host variable MAC placeholders
+with the discovered values:
 
 ```bash
-ansible-inventory \
-  -i environments/lab/inventory.yml \
-  --graph
+ansible-playbook utils/populate_host_vars.yml -i environments/lab/inventory.yml
+
+# Verify no placeholders remain:
+grep -r 'CHANGE_ME.*MAC' ../aap-demo-rhel-gitops-state/host_vars/
 ```
 
-### 4. Inspect the generated inventory
+Commit the populated host_vars in the state repository:
 
 ```bash
-ansible-inventory \
-  -i environments/lab/inventory.yml \
-  --graph
+cd ../aap-demo-rhel-gitops-state
+git add host_vars && git commit -m "Populate host MAC addresses" && git push
 ```
 
-The discovery playbook also writes `group_vars/all/generated_inventory.yml`,
-which is consumed by CasC to create AAP hosts and groups.
+## Repository Boundary
 
-### 5. Start reconciliation
+| Concern | Owner |
+|---|---|
+| KubeVirt VM lifecycle | This repository |
+| SSH key generation and AAP Machine Credential | This repository |
+| Discovered management IP inventory | This repository and AAP inventory |
+| AAP organizations, projects, credentials, and job templates | This repository |
+| Pre-demo MAC population utilities | This repository |
+| RHEL System Role desired state | `aap-demo-rhel-gitops-state` |
 
-Run locally while developing, or launch the reconciliation job template in AAP:
+## Reset the Lab
 
-```bash
-ansible-playbook \
-  -i environments/lab/inventory.yml \
-  ../aap-demo-rhel-gitops-state/site.yml
-```
-
-The final event demo should use AAP for this step so the audience can see the
-Project sync and job launch after a Git commit.
-
-### 6. Reset the lab
-
-The master cleanup removes AAP objects, deletes the VMs, restores the generated
-inventory files to boilerplate, and removes the runtime SSH key:
+The master cleanup removes AAP objects, deletes the VMs, restores generated
+inventory files to boilerplate, removes the discovered facts snapshot, and
+deletes the runtime SSH key:
 
 ```bash
 ansible-playbook \
@@ -161,7 +141,7 @@ ansible-playbook \
   -e demo_destroy_confirm=true
 ```
 
-The individual cleanup stages remain available for troubleshooting:
+Individual stages remain available for troubleshooting:
 
 ```bash
 ansible-playbook playbooks/cleanup/01_remove_aap.yml --vault-id @prompt -e demo_aap_cleanup_confirm=true
@@ -175,19 +155,41 @@ Resetting the platform lab does not reset or rewrite the state repository.
 
 | Path | Purpose |
 |---|---|
+| `playbooks/bootstrap.yml` | Single-command lab creation and AAP bootstrap |
 | `playbooks/setup/` | Ordered key, VM, and discovery operations |
 | `playbooks/cleanup.yml` | Master teardown and generated-file reset entry point |
 | `playbooks/cleanup/` | AAP teardown, VM deletion, and local reset stages |
 | `playbooks/aap_config.yml` | AAP Configuration as Code entry point |
-| `environments/lab/inventory.yml` | Visible generated lab inventory |
 | `group_vars/all/` | Platform and AAP configuration variables |
+| `environments/lab/` | Generated inventory and discovered VM facts |
+| `templates/` | KubeVirt VM specs and inventory templates |
+| `utils/` | Pre-demo MAC population and uncomment scripts |
 | `runtime/` | Ignored local runtime material, including private keys |
-| `templates/` | KubeVirt and inventory templates |
+| `context/` | Execution Environment definition for AAP |
 
-## Status
+## Job Templates
 
-The ordered setup, discovery, cleanup, and bootstrap playbooks are now present.
-End-to-end execution still requires installing the declared collections and
-supplying environment-specific values. The existing
-`aap-demo-rhel-gitops` demo remains intact while the split implementation is
-built and validated incrementally.
+After CasC is applied, the following AAP job templates are available:
+
+| Name | Playbook | Purpose |
+|---|---|---|
+| JT - RHEL GitOps Reconciliation | `site.yml` (state repo) | Reconcile declared RHEL state |
+| JT - RHEL GitOps Provision VMs | `playbooks/setup/02_provision_vms.yml` | Create KubeVirt VMs |
+| JT - RHEL GitOps Discover Inventory | `playbooks/setup/03_discover_inventory.yml` | Populate inventory from VMI facts |
+| JT - RHEL GitOps Cleanup | `playbooks/cleanup.yml` | Full lab teardown |
+
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `kubernetes.core.k8s` fails with Python import error | Python SDKs not installed in venv | `source .venv/bin/activate && python -m pip install -r requirements.txt` |
+| VMI discovery has no `ipAddress` | Guest agent not yet reporting | Discovery waits and retries; re-run if needed |
+| Key written under `playbooks/setup/runtime/` | Running playbook from wrong directory | Always run from the repository root |
+| `401 Unauthorized` from AAP API | Token variable name mismatch | CasC expects `aap_token`, not `controller_oauthtoken` |
+| `aap_hostname` missing scheme in URI check | Hostname stored without `https://` | The cleanup playbook prepends it internally |
+
+## Companion Repository
+
+After the lab is bootstrapped and host MACs are populated, the audience-facing
+demo continues in `aap-demo-rhel-gitops-state`. See its README for the live demo
+workflow.
