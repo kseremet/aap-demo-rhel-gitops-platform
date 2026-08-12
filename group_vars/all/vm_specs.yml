@@ -11,6 +11,9 @@ vm_specs:
       - name: disk-data
         serial: data-disk01
         size: 5Gi
+      - name: disk-web
+        serial: web-disk01
+        size: 10Gi
   web-02:
     vm_name: web-02-gitops
     group: web_servers
@@ -21,6 +24,9 @@ vm_specs:
       - name: disk-data
         serial: data-disk01
         size: 5Gi
+      - name: disk-web
+        serial: web-disk01
+        size: 10Gi
   db-01:
     vm_name: db-01-gitops
     group: database_servers
@@ -31,6 +37,9 @@ vm_specs:
       - name: disk-data
         serial: data-disk01
         size: 5Gi
+      - name: disk-db
+        serial: db-disk01
+        size: 50Gi
   app-01:
     vm_name: app-01-gitops
     group: app_servers
@@ -41,3 +50,6 @@ vm_specs:
       - name: disk-data
         serial: data-disk01
         size: 5Gi
+      - name: disk-app
+        serial: app-disk01
+        size: 20Gi

@@ -1,0 +1,21 @@
+vm_facts:
+-   ansible_host: 10.130.1.17
+    internal_ip: 192.168.152.10
+    internal_mac: 02:a4:1a:55:68:28
+    management_mac: 02:a4:1a:55:68:27
+    name: web-01
+-   ansible_host: 10.130.1.18
+    internal_ip: 192.168.152.11
+    internal_mac: 02:a4:1a:55:68:2a
+    management_mac: 02:a4:1a:55:68:29
+    name: web-02
+-   ansible_host: 10.129.0.142
+    internal_ip: 192.168.152.12
+    internal_mac: 02:a4:1a:55:68:2c
+    management_mac: 02:a4:1a:55:68:2b
+    name: db-01
+-   ansible_host: 10.130.1.15
+    internal_ip: 192.168.152.13
+    internal_mac: 02:a4:1a:55:68:2e
+    management_mac: 02:a4:1a:55:68:2d
+    name: app-01

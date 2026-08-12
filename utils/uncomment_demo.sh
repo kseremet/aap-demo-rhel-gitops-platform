@@ -27,7 +27,7 @@ EOF
   exit 1
 fi
 
-uncomment() { sed -i '' 's/^# //' "$@"; }
+uncomment() { sed -i '' 's/^#   //' "$@"; }
 
 case "$PHASE" in
   network)
