@@ -79,9 +79,19 @@ controller_templates:
       - "{{ demo_machine_credential_name }}"
     survey_enabled: true
     survey_spec:
-      - question_name: Incident description
-        question_description: Describe the issue for the CrewAI investigation workflow.
-        type: textarea
-        variable: ai_incident_prompt
-        required: true
-        default: "Investigate web-01 because net.core.somaxconn appears inconsistent with the web-server policy. Determine the root cause and propose a GitOps remediation pull request. Do not modify the host directly."
+      name: AI incident investigation
+      description: Incident prompt passed to the CrewAI investigation workflow.
+      spec:
+        - question_name: Incident description
+          question_description: Describe the issue for the CrewAI investigation workflow.
+          type: textarea
+          variable: ai_incident_prompt
+          required: true
+          min: 1
+          max: 4096
+          default: >-
+            Investigate web-01 because net.core.somaxconn appears inconsistent
+            with the web-server policy. Determine the root cause and propose a
+            GitOps remediation pull request. Do not modify the host directly.
+          choices: ""
+          new_question: true
