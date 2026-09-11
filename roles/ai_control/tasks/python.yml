@@ -1,0 +1,44 @@
+---
+- name: Create the AI control VM Python virtual environment
+  ansible.builtin.command:
+    cmd: "/usr/bin/python3.12 -m venv {{ ai_control_venv_path }}"
+    creates: "{{ ai_control_venv_path }}/bin/python"
+  tags:
+    - python
+
+- name: Upgrade pip in the AI control VM virtual environment
+  ansible.builtin.command:
+    cmd: "{{ ai_control_venv_path }}/bin/python -m pip install --upgrade pip"
+  register: _ai_control_pip_upgrade
+  changed_when: "'Successfully installed' in _ai_control_pip_upgrade.stdout"
+  tags:
+    - python
+
+- name: Install CrewAI, FastAPI, and Linux MCP packages
+  ansible.builtin.command:
+    cmd: >-
+      {{ ai_control_venv_path }}/bin/python -m pip install
+      {{ ai_control_pip_packages | join(' ') }}
+  register: _ai_control_pip_install
+  changed_when: >-
+    'Successfully installed' in _ai_control_pip_install.stdout
+    or 'Installing collected packages' in _ai_control_pip_install.stdout
+  tags:
+    - python
+    - mcp
+
+- name: Configure the venv to use the bundled modern SQLite library
+  ansible.builtin.copy:
+    dest: "{{ ai_control_venv_path }}/lib64/python3.12/site-packages/sitecustomize.py"
+    mode: "0644"
+    content: |
+      # ChromaDB requires a newer SQLite than the RHEL system Python provides.
+      try:
+          import pysqlite3
+          import sys
+          sys.modules["sqlite3"] = pysqlite3
+      except ImportError:
+          pass
+  tags:
+    - python
+    - crewai

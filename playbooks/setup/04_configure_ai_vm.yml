@@ -1,0 +1,72 @@
+# Description: Configure the AI control VM after VM discovery.
+# The VM runs CrewAI and one local Linux MCP server; MCP reaches the RHEL fleet
+# over passwordless SSH. Safe to re-run after the VM has been provisioned.
+---
+- name: Register the discovered AI control VM for configuration
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  collections:
+    - ansible.builtin
+  vars_files:
+    - ../../vault.yml
+    - ../../group_vars/all/demo_variables.yml
+    - ../../group_vars/all/vm_specs.yml
+  tasks:
+    - name: Load discovered VM addresses
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../../environments/lab/discovered_facts.yml"
+      tags:
+        - always
+
+    - name: Resolve the generated runtime SSH key path
+      ansible.builtin.set_fact:
+        demo_ssh_private_key_path: "{{ playbook_dir }}/../../{{ demo_ssh_private_key_file }}"
+      tags:
+        - always
+
+    - name: Validate the AI control VM and runtime key are available
+      ansible.builtin.assert:
+        that:
+          - (vm_facts | selectattr('name', 'equalto', 'ai-01') | list | length) == 1
+          - demo_ssh_private_key_path is file
+        fail_msg: >-
+          Run VM provisioning and discovery first. The AI VM must be present and
+          the generated SSH key must remain at the configured runtime path.
+      tags:
+        - always
+
+    - name: Add the discovered AI control VM to the temporary inventory
+      ansible.builtin.add_host:
+        name: ai-01
+        groups: ai_control_runtime
+        ansible_host: "{{ (vm_facts | selectattr('name', 'equalto', 'ai-01') | first).ansible_host }}"
+        ansible_user: cloud-user
+        ansible_private_key_file: "{{ demo_ssh_private_key_path }}"
+        ansible_become: true
+      tags:
+        - always
+
+- name: Configure the AI control VM
+  hosts: ai_control_runtime
+  become: true
+  gather_facts: true
+  collections:
+    - ansible.builtin
+  vars_files:
+    - ../../vault.yml
+    - ../../group_vars/all/demo_variables.yml
+    - ../../environments/lab/discovered_facts.yml
+  vars:
+    demo_ssh_private_key_path: "{{ playbook_dir }}/../../{{ demo_ssh_private_key_file }}"
+    rhc_auth:
+      activation_keys:
+        keys:
+          - "{{ vault_rhc_activation_key }}"
+    ai_control_target_hosts: >-
+      {{ vm_facts | selectattr('fleet_managed', 'defined')
+         | selectattr('fleet_managed', 'equalto', true) | list }}
+  roles:
+    - role: ai_control
+      tags:
+        - ai_control

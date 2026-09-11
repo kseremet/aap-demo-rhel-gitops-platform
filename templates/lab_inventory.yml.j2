@@ -17,3 +17,13 @@ all:
               ansible_host: {{ discovered_host_data[host].ansible_host }}
 {% endfor %}
 {% endfor %}
+    control_plane:
+      vars:
+        ansible_user: cloud-user
+        ansible_become: true
+        ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+      hosts:
+{% for host in control_hosts | default([]) %}
+        {{ host.name }}:
+          ansible_host: {{ host.ansible_host }}
+{% endfor %}

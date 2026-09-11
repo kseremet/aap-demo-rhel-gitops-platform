@@ -1,0 +1,340 @@
+#!{{ ai_control_venv_path }}/bin/python
+"""Investigate a RHEL incident and propose a GitHub pull request."""
+
+import argparse
+import asyncio
+import base64
+import json
+import os
+import re
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
+from uuid import uuid4
+
+from crewai import Agent, Crew, LLM, Process, Task
+from crewai.tools import tool
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
+
+
+MCP_COMMAND = os.environ.get(
+    "LINUX_MCP_COMMAND", "/home/cloud-user/.venv/bin/linux-mcp-server"
+)
+STATE_REPO_URL = os.environ["STATE_REPO_URL"]
+STATE_REPO_BRANCH = os.environ.get("STATE_REPO_BRANCH", "main")
+STATE_REPO_PATH = Path(os.environ["STATE_REPO_PATH"])
+GITHUB_API_URL = os.environ.get("GITHUB_API_URL", "https://api.github.com").rstrip("/")
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
+PR_BRANCH_PREFIX = os.environ.get("AI_PR_BRANCH_PREFIX", "aiops/")
+LLM_PROVIDER = os.environ.get("AI_LLM_PROVIDER", "openai")
+LLM_MODEL = os.environ.get("AI_LLM_MODEL", "gpt-5.6-luna")
+LLM_BASE_URL = os.environ.get("AI_LLM_BASE_URL", "https://api.openai.com/v1")
+LLM_API_KEY = os.environ.get("AI_LLM_API_KEY", "")
+AGENT_RUN_ID = str(uuid4())
+INCIDENT_PROBLEM = ""
+
+
+def _text(result):
+    return "\n".join(item.text for item in result.content if hasattr(item, "text"))
+
+
+class LinuxMCP:
+    """Short-lived stdio MCP sessions keep each diagnostic call isolated."""
+
+    async def _call(self, name, arguments):
+        params = StdioServerParameters(command=MCP_COMMAND, args=[])
+        async with stdio_client(params) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                return await session.call_tool(name, arguments)
+
+    def call(self, name, arguments):
+        return asyncio.run(self._call(name, arguments))
+
+    def tools(self):
+        async def discover():
+            params = StdioServerParameters(command=MCP_COMMAND, args=[])
+            async with stdio_client(params) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    return await session.list_tools()
+
+        return asyncio.run(discover()).tools
+
+
+mcp_client = LinuxMCP()
+
+
+@tool("Discover Linux diagnostic tools")
+def discover_linux_tools() -> str:
+    """List available Linux MCP tools and their input schemas."""
+    return json.dumps(
+        [
+            {"name": tool.name, "description": tool.description, "inputSchema": tool.inputSchema}
+            for tool in mcp_client.tools()
+        ],
+        indent=2,
+    )
+
+
+@tool("Call a read-only Linux diagnostic tool")
+def call_linux_read_tool(tool_name: str, arguments_json: str) -> str:
+    """Call a discovered read-only Linux MCP tool for a target host.
+
+    Do not use this tool for package, service, file, configuration, or command
+    execution changes. The host argument must be an inventory alias.
+    """
+    denied = re.compile(
+        r"(write|delete|remove|create|install|uninstall|change|set_|execute|run_command|restart|stop|start)",
+        re.IGNORECASE,
+    )
+    if denied.search(tool_name):
+        return "REFUSED: tool is not in the read-only diagnostic allowlist"
+    available = {item.name for item in mcp_client.tools()}
+    if tool_name not in available:
+        return f"REFUSED: unknown MCP tool {tool_name}"
+    try:
+        arguments = json.loads(arguments_json)
+        result = mcp_client.call(tool_name, arguments)
+        return _text(result)
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        return f"Invalid tool arguments: {exc}"
+
+
+@tool("Read a GitOps state file")
+def read_state_file(relative_path: str) -> str:
+    """Read a text file from the checked-out public state repository."""
+    path = (STATE_REPO_PATH / relative_path).resolve()
+    if STATE_REPO_PATH.resolve() not in path.parents:
+        return "REFUSED: path escapes the state repository"
+    if not path.is_file():
+        return f"State file not found: {relative_path}"
+    return path.read_text(encoding="utf-8")
+
+
+def _github_repo():
+    parsed = urllib.parse.urlparse(STATE_REPO_URL)
+    parts = [part for part in parsed.path.split("/") if part]
+    if len(parts) < 2:
+        raise ValueError("STATE_REPO_URL must identify an owner and repository")
+    return parts[-2], parts[-1].removesuffix(".git")
+
+
+def _github_request(method, path, payload=None):
+    if not GITHUB_TOKEN:
+        raise RuntimeError("GITHUB_TOKEN is not configured")
+    body = None if payload is None else json.dumps(payload).encode("utf-8")
+    request = urllib.request.Request(
+        f"{GITHUB_API_URL}{path}",
+        data=body,
+        method=method,
+        headers={
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {GITHUB_TOKEN}",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "Content-Type": "application/json",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _build_pr_body(agent_body):
+    """Make the PR self-contained after this short-lived agent exits."""
+    metadata = {
+        "workflow": "incident-investigation",
+        "agent_run_id": AGENT_RUN_ID,
+        "agent_model": LLM_MODEL,
+        "target_branch": STATE_REPO_BRANCH,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    return (
+        "## Incident\n\n"
+        f"{INCIDENT_PROBLEM}\n\n"
+        "## Agent Analysis and Proposal\n\n"
+        f"{agent_body}\n\n"
+        "## Investigation Notes\n\n"
+        "The evidence and validation plan above were produced from read-only Linux MCP diagnostics. "
+        "Managed hosts were not modified by this workflow.\n\n"
+        "<!-- aiops-context:\n"
+        f"{json.dumps(metadata, indent=2)}\n"
+        "-->"
+    )
+
+
+@tool("Create a GitHub remediation pull request")
+def create_github_pull_request(
+    relative_path: str,
+    file_content: str,
+    pr_title: str,
+    pr_body: str,
+) -> str:
+    """Create a PR for any file within the checked-out state repository.
+
+    Existing files may be updated and new roles, tasks, templates, variables,
+    tests, and documentation may be created. The pull request is the human
+    review boundary; managed hosts are never changed directly.
+    """
+    candidate = Path(relative_path)
+    if not relative_path or candidate.is_absolute() or ".." in candidate.parts:
+        return "REFUSED: path must stay inside the state repository"
+    if candidate.parts and candidate.parts[0] == ".git":
+        return "REFUSED: Git metadata cannot be changed through this tool"
+
+    owner, repo = _github_repo()
+    slug = re.sub(r"[^a-z0-9]+", "-", pr_title.lower()).strip("-")[:40]
+    branch = f"{PR_BRANCH_PREFIX}{slug}-{datetime.now(timezone.utc):%Y%m%d%H%M%S}"
+    base_ref = _github_request("GET", f"/repos/{owner}/{repo}/git/ref/heads/{STATE_REPO_BRANCH}")
+    _github_request(
+        "POST",
+        f"/repos/{owner}/{repo}/git/refs",
+        {"ref": f"refs/heads/{branch}", "sha": base_ref["object"]["sha"]},
+    )
+    try:
+        current = _github_request(
+            "GET", f"/repos/{owner}/{repo}/contents/{urllib.parse.quote(relative_path)}?ref={branch}"
+        )
+        sha = current["sha"]
+    except urllib.error.HTTPError as exc:
+        if exc.code != 404:
+            raise
+        sha = None
+    payload = {
+        "message": pr_title,
+        "content": base64.b64encode(file_content.encode("utf-8")).decode("ascii"),
+        "branch": branch,
+    }
+    if sha:
+        payload["sha"] = sha
+    _github_request("PUT", f"/repos/{owner}/{repo}/contents/{relative_path}", payload)
+    pr = _github_request(
+        "POST",
+        f"/repos/{owner}/{repo}/pulls",
+        {
+            "title": pr_title,
+            "head": branch,
+            "base": STATE_REPO_BRANCH,
+            "body": _build_pr_body(pr_body),
+        },
+    )
+    return json.dumps({"url": pr["html_url"], "branch": branch, "path": relative_path})
+
+
+def _llm():
+    return LLM(
+        model=f"{LLM_PROVIDER}/{LLM_MODEL}",
+        api_key=LLM_API_KEY,
+        base_url=LLM_BASE_URL,
+    )
+
+
+def run(problem):
+    global INCIDENT_PROBLEM
+    INCIDENT_PROBLEM = problem
+    investigator = Agent(
+        role="RHEL Incident Investigator",
+        goal="Collect direct, read-only evidence from the reported host using Linux MCP.",
+        backstory=(
+            "You investigate Linux incidents carefully. Discover tools first, use only "
+            "read-only tools, identify the target host, and never modify a host."
+        ),
+        tools=[discover_linux_tools, call_linux_read_tool, read_state_file],
+        llm=_llm(),
+        verbose=True,
+    )
+    analyst = Agent(
+        role="GitOps Root Cause Analyst",
+        goal="Determine root cause by comparing MCP evidence with the declared state repository.",
+        backstory=(
+            "You understand Ansible variable precedence and RHEL System Roles. "
+            "Do not invent values. Distinguish drift from an intentional host override."
+        ),
+        tools=[read_state_file],
+        llm=_llm(),
+        verbose=True,
+    )
+    pr_author = Agent(
+        role="GitOps Remediation Author",
+        goal="Create one minimal, reviewable GitHub pull request for the proposed remediation.",
+        backstory=(
+            "You never remediate hosts directly. Change the state repository through the "
+            "PR tool, preserve unrelated content, and include evidence."
+        ),
+        tools=[read_state_file, create_github_pull_request],
+        llm=_llm(),
+        verbose=True,
+    )
+    reporter = Agent(
+        role="Incident Reporter",
+        goal="Summarize evidence, root cause, and the pull request clearly.",
+        backstory="You produce concise, factual incident reports with no unsupported claims.",
+        tools=[],
+        llm=_llm(),
+        verbose=True,
+    )
+
+    investigate = Task(
+        description=(
+            f"Investigate this issue: {problem}\n"
+            "Discover available tools, query the named host, and read the relevant kernel "
+            "settings files from the checked-out state repository. Do not modify anything."
+        ),
+        expected_output="Evidence with host, tool names, observed values, and relevant state files.",
+        agent=investigator,
+    )
+    analyze = Task(
+        description=(
+            "Using the investigation evidence, determine the root cause. Explain variable "
+            "precedence and identify the smallest correct state-repository change. If evidence "
+            "is insufficient, stop and say so."
+        ),
+        expected_output="Root cause, evidence, target file, proposed values, and confidence.",
+        agent=analyst,
+        context=[investigate],
+    )
+    propose = Task(
+        description=(
+            "Using the investigation and root-cause analysis, create a GitHub PR when the "
+            "evidence supports a state-repository remediation. Read current files first, "
+            "preserve unrelated content, and do not touch hosts. New roles and files are "
+            "allowed when justified by the issue."
+        ),
+        expected_output=(
+            "PR URL, changed files, exact proposed changes, evidence summary, "
+            "and validation plan."
+        ),
+        agent=pr_author,
+        context=[investigate, analyze],
+    )
+    report = Task(
+        description="Write the final incident report from the investigation, analysis, and PR result.",
+        expected_output="Problem, evidence, root cause, PR URL or no-action reason, and validation plan.",
+        agent=reporter,
+        context=[investigate, analyze, propose],
+    )
+    crew = Crew(
+        agents=[investigator, analyst, pr_author, reporter],
+        tasks=[investigate, analyze, propose, report],
+        process=Process.sequential,
+        verbose=True,
+    )
+    return crew.kickoff()
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Investigate a RHEL issue and propose a GitOps PR")
+    parser.add_argument("problem", help="Incident description")
+    args = parser.parse_args()
+    if not LLM_API_KEY:
+        parser.error("AI_LLM_API_KEY is not configured")
+    if not GITHUB_TOKEN:
+        parser.error("GITHUB_TOKEN is not configured")
+    print(run(args.problem))
+
+
+if __name__ == "__main__":
+    main()

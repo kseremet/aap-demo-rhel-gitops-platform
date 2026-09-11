@@ -7,3 +7,12 @@ vault_aap_token: CHANGE_ME
 # runtime/demo_key file is used instead. If set, provide the complete private
 # key value as a Vault multiline string.
 vault_demo_ssh_private_key: CHANGE_ME
+
+# Red Hat activation key used to register the AI control VM.
+vault_rhc_activation_key: CHANGE_ME
+
+# GitHub token used by the AI agent to create branches and pull requests.
+vault_github_token: CHANGE_ME
+
+# LLM API key used by the future CrewAI service on ai-01.
+vault_ai_llm_api_key: CHANGE_ME

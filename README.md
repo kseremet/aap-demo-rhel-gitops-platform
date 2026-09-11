@@ -76,8 +76,8 @@ ansible-galaxy collection install \
 
 ### 5. Bootstrap the lab
 
-One command creates the SSH key, provisions the VMs, discovers management
-addresses, and configures AAP:
+One command creates the SSH key, provisions the RHEL fleet and AI control VM,
+discovers management addresses, configures the AI control VM, and configures AAP:
 
 ```bash
 ansible-playbook playbooks/bootstrap.yml --vault-id @prompt
@@ -96,6 +96,11 @@ ansible-inventory -i environments/lab/inventory.yml --graph
 The discovery step also writes `environments/lab/discovered_facts.yml` with MAC
 addresses and IPs for every VM. This file is used by the pre-demo preparation
 step below.
+
+The `ai-01` control VM is intentionally excluded from the AAP `RHEL Fleet`
+inventory. It is configured by the platform bootstrap and reserved for the
+CrewAI and Linux MCP portions of the demo. The local inventory exposes it under
+the separate `control_plane` group.
 
 ### 7. Pre-demo preparation
 
@@ -123,6 +128,7 @@ git add host_vars && git commit -m "Populate host MAC addresses" && git push
 | KubeVirt VM lifecycle | This repository |
 | SSH key generation and AAP Machine Credential | This repository |
 | Discovered management IP inventory | This repository and AAP inventory |
+| AI control VM and its CrewAI/Linux MCP runtime | This repository |
 | AAP organizations, projects, credentials, and job templates | This repository |
 | Pre-demo MAC population utilities | This repository |
 | RHEL System Role desired state | `aap-demo-rhel-gitops-state` |
@@ -167,6 +173,9 @@ Resetting the platform lab does not reset or rewrite the state repository.
 | `runtime/` | Ignored local runtime material, including private keys |
 | `context/` | Execution Environment definition for AAP |
 
+The bootstrap also runs `playbooks/setup/04_configure_ai_vm.yml` to prepare the
+AI control VM and its SSH/MCP runtime.
+
 ## Job Templates
 
 After CasC is applied, the following AAP job templates are available:
@@ -193,3 +202,20 @@ After CasC is applied, the following AAP job templates are available:
 After the lab is bootstrapped and host MACs are populated, the audience-facing
 demo continues in `aap-demo-rhel-gitops-state`. See its README for the live demo
 workflow.
+
+## AI Control VM
+
+The platform provisions `ai-01-gitops` as a fifth VM with 2 vCPUs and 4 GiB of
+memory. It is a control system, not a RHEL fleet target. The bootstrap installs
+Python 3.12, creates `/home/cloud-user/.venv`, installs the Linux MCP server and
+CrewAI dependencies, and configures SSH aliases to `web-01`, `web-02`, `db-01`,
+and `app-01`.
+
+The Linux MCP server runs locally in stdio mode and uses passwordless SSH to
+perform diagnostics on the selected target. No MCP server is installed on the
+fleet nodes. The future CrewAI service reads its model settings from
+`/home/cloud-user/agentic-aiops/.env`.
+
+Set `demo_ai_llm_provider`, `demo_ai_llm_model`, and `demo_ai_llm_base_url` in
+`group_vars/all/demo_variables.yml`. Set `vault_ai_llm_api_key` in `vault.yml`
+and encrypt that file before use.

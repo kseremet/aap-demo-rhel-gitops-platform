@@ -53,3 +53,11 @@ vm_specs:
       - name: disk-app
         serial: app-disk01
         size: 20Gi
+  ai-01:
+    vm_name: ai-01-gitops
+    group: control_plane
+    role: ai_control
+    fleet_managed: false
+    cpu_cores: 2
+    memory: 4Gi
+    data_disks: []

@@ -1,0 +1,58 @@
+---
+- name: Ensure the AI user's SSH directory exists
+  ansible.builtin.file:
+    path: "{{ ai_control_ssh_dir }}"
+    state: directory
+    owner: "{{ ai_control_user }}"
+    group: "{{ ai_control_user }}"
+    mode: "0700"
+  tags:
+    - ssh
+
+- name: Install the fleet SSH private key on the AI control VM
+  ansible.builtin.copy:
+    src: "{{ demo_ssh_private_key_path }}"
+    dest: "{{ ai_control_private_key_path }}"
+    owner: "{{ ai_control_user }}"
+    group: "{{ ai_control_user }}"
+    mode: "0600"
+  no_log: true
+  tags:
+    - ssh
+    - secrets
+
+- name: Configure stable SSH aliases for the RHEL fleet
+  ansible.builtin.template:
+    src: ssh_config.j2
+    dest: "{{ ai_control_ssh_dir }}/config"
+    owner: "{{ ai_control_user }}"
+    group: "{{ ai_control_user }}"
+    mode: "0600"
+  tags:
+    - ssh
+
+- name: Collect target SSH host keys for non-interactive MCP calls
+  become: true
+  become_user: "{{ ai_control_user }}"
+  ansible.builtin.command:
+    cmd: "ssh-keyscan -H -T 5 {{ item.ansible_host }}"
+  loop: "{{ ai_control_target_hosts }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: _ai_control_known_hosts
+  changed_when: false
+  failed_when: false
+  tags:
+    - ssh
+    - verification
+
+- name: Install collected target SSH host keys
+  ansible.builtin.copy:
+    content: >-
+      {{ _ai_control_known_hosts.results | map(attribute='stdout') | join('\n') }}
+    dest: "{{ ai_control_known_hosts_path }}"
+    owner: "{{ ai_control_user }}"
+    group: "{{ ai_control_user }}"
+    mode: "0644"
+  tags:
+    - ssh

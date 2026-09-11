@@ -1,0 +1,21 @@
+---
+- name: Install packages required by the AI control VM
+  become: true
+  ansible.builtin.dnf:
+    name:
+      - git
+      - openssh-clients
+      - python3.12
+    state: present
+  tags:
+    - packages
+
+- name: Ensure the AI application directory exists
+  ansible.builtin.file:
+    path: "{{ ai_control_app_path }}"
+    state: directory
+    owner: "{{ ai_control_user }}"
+    group: "{{ ai_control_user }}"
+    mode: "0755"
+  tags:
+    - directories

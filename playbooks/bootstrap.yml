@@ -3,4 +3,5 @@
 - ansible.builtin.import_playbook: setup/01_generate_keys.yml
 - ansible.builtin.import_playbook: setup/02_provision_vms.yml
 - ansible.builtin.import_playbook: setup/03_discover_inventory.yml
+- ansible.builtin.import_playbook: setup/04_configure_ai_vm.yml
 - ansible.builtin.import_playbook: aap_config.yml

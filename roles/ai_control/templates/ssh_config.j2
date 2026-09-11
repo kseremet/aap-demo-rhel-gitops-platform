@@ -1,0 +1,11 @@
+Host *
+  User {{ ai_control_mcp_user }}
+  IdentityFile {{ ai_control_private_key_path }}
+  IdentitiesOnly yes
+  UserKnownHostsFile {{ ai_control_known_hosts_path }}
+  StrictHostKeyChecking accept-new
+
+{% for host in ai_control_target_hosts %}
+Host {{ host.name }}
+  HostName {{ host.ansible_host }}
+{% endfor %}

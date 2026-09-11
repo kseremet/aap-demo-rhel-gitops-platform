@@ -45,12 +45,21 @@
       ansible.builtin.include_vars:
         file: "{{ _facts_file }}"
 
+    - name: Select hosts owned by the RHEL state repository
+      ansible.builtin.set_fact:
+        fleet_vm_facts: >-
+          {{ vm_facts | rejectattr('fleet_managed', 'defined') | list
+             + (vm_facts | selectattr('fleet_managed', 'defined')
+                | selectattr('fleet_managed', 'equalto', true) | list) }}
+      tags:
+        - always
+
     - name: Display facts to be applied
       ansible.builtin.debug:
         msg: >-
           {{ item.name }}: management_mac={{ item.management_mac }}
           internal_mac={{ item.internal_mac }}
-      loop: "{{ vm_facts }}"
+      loop: "{{ fleet_vm_facts }}"
 
   tasks:
     - name: Replace management MAC placeholder for each host
@@ -58,14 +67,14 @@
         path: "{{ _state_host_vars }}/{{ item.name }}/network.yml"
         regexp: 'CHANGE_ME_{{ item.name | upper | replace("-", "") }}_DHCP_MAC'
         replace: '{{ item.management_mac }}'
-      loop: "{{ vm_facts }}"
+      loop: "{{ fleet_vm_facts }}"
 
     - name: Replace internal MAC placeholder for each host
       ansible.builtin.replace:
         path: "{{ _state_host_vars }}/{{ item.name }}/network.yml"
         regexp: 'CHANGE_ME_{{ item.name | upper | replace("-", "") }}_INTERNAL_MAC'
         replace: '{{ item.internal_mac }}'
-      loop: "{{ vm_facts }}"
+      loop: "{{ fleet_vm_facts }}"
 
     - name: Show updated host_vars network files
       ansible.builtin.debug:

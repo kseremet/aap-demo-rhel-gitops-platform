@@ -4,6 +4,7 @@ demo_organization_name: RHEL GitOps
 demo_state_project_name: rhel-gitops-state
 demo_platform_project_name: rhel-gitops-platform
 demo_inventory_name: RHEL Fleet
+demo_ai_inventory_name: AI Control
 demo_machine_credential_name: RHEL SSH Key
 demo_state_scm_url: CHANGE_ME_GIT_REPO_URL
 demo_state_scm_branch: main
@@ -20,3 +21,19 @@ openshift_vm_storage_size: 30Gi
 openshift_vm_multus_network_name: default/localnet-vlan150
 demo_ssh_private_key_file: runtime/demo_key
 demo_ssh_key_name: demo_key
+
+# Red Hat registration values. Keep the activation key in vault.yml.
+rhc_organization: "6340056"
+rhc_repos_baseline:
+  - name: rhel-9-for-x86_64-baseos-rpms
+    state: enabled
+  - name: rhel-9-for-x86_64-appstream-rpms
+    state: enabled
+
+# AI control VM model settings. The API key belongs in vault.yml.
+demo_ai_llm_provider: openai
+demo_ai_llm_model: gpt-5.6-luna
+demo_ai_llm_base_url: https://api.openai.com/v1
+demo_ai_repo_path: /home/cloud-user/agentic-aiops/state-repo
+demo_ai_github_api_url: https://api.github.com
+demo_ai_pr_branch_prefix: aiops/

@@ -1,0 +1,51 @@
+---
+- name: Write AI control VM environment configuration
+  ansible.builtin.template:
+    src: ai.env.j2
+    dest: "{{ ai_control_app_path }}/.env"
+    owner: "{{ ai_control_user }}"
+    group: "{{ ai_control_user }}"
+    mode: "0600"
+  no_log: true
+  tags:
+    - config
+    - secrets
+
+- name: Check out the GitOps state repository for agent analysis
+  become: true
+  become_user: "{{ ai_control_user }}"
+  ansible.builtin.git:
+    repo: "{{ ai_control_state_repo_url }}"
+    version: "{{ ai_control_state_repo_branch }}"
+    dest: "{{ ai_control_repo_path }}"
+    update: true
+  tags:
+    - config
+    - git
+
+- name: Write AI control VM setup metadata
+  ansible.builtin.copy:
+    dest: "{{ ai_control_app_path }}/README.md"
+    owner: "{{ ai_control_user }}"
+    group: "{{ ai_control_user }}"
+    mode: "0644"
+    content: |
+      # Agentic AIOps runtime
+
+      This directory is provisioned by the platform repository.
+
+      Activate the Python environment with:
+
+          source {{ ai_control_venv_path }}/bin/activate
+
+      The Linux MCP server runs locally in stdio mode and reaches targets using
+      the SSH aliases configured in `~/.ssh/config`.
+
+      Run the manual investigation agent with:
+
+          set -a; source {{ ai_control_app_path }}/.env; set +a
+          {{ ai_control_agent_path }} "Investigate web-01 because net.core.somaxconn appears inconsistent with the web-server policy. \
+          Determine the root cause and propose a GitOps remediation pull request. \
+          Do not modify the host directly."
+  tags:
+    - config

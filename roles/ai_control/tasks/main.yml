@@ -1,0 +1,47 @@
+---
+- name: Register the AI control VM with Red Hat
+  ansible.builtin.include_role:
+    name: redhat.rhel_system_roles.rhc
+  vars:
+    rhc_repositories: "{{ rhc_repos_baseline | default([]) }}"
+  tags:
+    - ai_control
+    - rhc
+    - subscription
+
+- name: Install AI control-system operating-system packages
+  ansible.builtin.include_tasks: packages.yml
+  tags:
+    - ai_control
+    - packages
+
+- name: Configure SSH from the AI control VM to the RHEL fleet
+  ansible.builtin.include_tasks: ssh.yml
+  tags:
+    - ai_control
+    - ssh
+
+- name: Install the CrewAI and Linux MCP Python environment
+  ansible.builtin.include_tasks: python.yml
+  tags:
+    - ai_control
+    - python
+    - mcp
+
+- name: Write AI runtime configuration for the next demo phase
+  ansible.builtin.include_tasks: config.yml
+  tags:
+    - ai_control
+    - config
+
+- name: Deploy CrewAI incident investigation agent
+  ansible.builtin.template:
+    src: incident_agent.py.j2
+    dest: "{{ ai_control_agent_path }}"
+    owner: "{{ ai_control_user }}"
+    group: "{{ ai_control_user }}"
+    mode: "0755"
+  no_log: true
+  tags:
+    - ai_control
+    - crewai

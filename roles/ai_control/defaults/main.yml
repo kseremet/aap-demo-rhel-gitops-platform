@@ -1,0 +1,37 @@
+---
+# AI control-system defaults. The control VM runs the MCP server locally and
+# uses SSH aliases to inspect the RHEL fleet.
+ai_control_user: cloud-user
+ai_control_venv_path: "/home/{{ ai_control_user }}/.venv"
+ai_control_app_path: "/home/{{ ai_control_user }}/agentic-aiops"
+ai_control_ssh_dir: "/home/{{ ai_control_user }}/.ssh"
+ai_control_private_key_path: "{{ ai_control_ssh_dir }}/id_ed25519"
+ai_control_known_hosts_path: "{{ ai_control_ssh_dir }}/known_hosts"
+
+# Keep these versions aligned with the validated RHEL MCP reference setup.
+ai_control_pip_packages:
+  - "fastmcp==2.14.5"
+  - "linux-mcp-server==1.4.1"
+  - mcp
+  - "crewai[openai]"
+  - fastapi
+  - uvicorn
+  - httpx
+  - openai
+  - requests
+  - python-dotenv
+  - pysqlite3-binary
+
+ai_control_target_hosts: []
+ai_control_llm_provider: "{{ demo_ai_llm_provider | default('openai') }}"
+ai_control_llm_model: "{{ demo_ai_llm_model | default('gpt-5.6-luna') }}"
+ai_control_llm_base_url: "{{ demo_ai_llm_base_url | default('https://api.openai.com/v1') }}"
+ai_control_llm_api_key: "{{ vault_ai_llm_api_key | default('') }}"
+ai_control_github_token: "{{ vault_github_token | default('') }}"
+ai_control_state_repo_url: "{{ demo_state_scm_url }}"
+ai_control_state_repo_branch: "{{ demo_state_scm_branch | default('main') }}"
+ai_control_github_api_url: "{{ demo_ai_github_api_url | default('https://api.github.com') }}"
+ai_control_repo_path: "{{ demo_ai_repo_path | default('/home/' ~ ai_control_user ~ '/agentic-aiops/state-repo') }}"
+ai_control_pr_branch_prefix: "{{ demo_ai_pr_branch_prefix | default('aiops/') }}"
+ai_control_agent_path: "{{ ai_control_app_path }}/incident_agent.py"
+ai_control_mcp_user: "cloud-user"
