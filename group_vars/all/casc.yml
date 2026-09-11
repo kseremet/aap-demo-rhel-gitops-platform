@@ -21,6 +21,10 @@ controller_inventories:
     organization: "{{ demo_organization_name }}"
     variables:
       ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+  - name: "{{ demo_ai_inventory_name }}"
+    organization: "{{ demo_organization_name }}"
+    variables:
+      ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
 
 controller_projects:
   - name: "{{ demo_state_project_name }}"
@@ -64,3 +68,20 @@ controller_templates:
     project: "{{ demo_platform_project_name }}"
     playbook: playbooks/cleanup.yml
     survey_enabled: true
+  - name: JT - AI Incident Investigation
+    description: Investigate an incident on the AI control VM and propose a GitHub pull request.
+    organization: "{{ demo_organization_name }}"
+    job_type: run
+    inventory: "{{ demo_ai_inventory_name }}"
+    project: "{{ demo_platform_project_name }}"
+    playbook: playbooks/ai/run_incident_agent.yml
+    credentials:
+      - "{{ demo_machine_credential_name }}"
+    survey_enabled: true
+    survey_spec:
+      - question_name: Incident description
+        question_description: Describe the issue for the CrewAI investigation workflow.
+        type: textarea
+        variable: ai_incident_prompt
+        required: true
+        default: "Investigate web-01 because net.core.somaxconn appears inconsistent with the web-server policy. Determine the root cause and propose a GitOps remediation pull request. Do not modify the host directly."

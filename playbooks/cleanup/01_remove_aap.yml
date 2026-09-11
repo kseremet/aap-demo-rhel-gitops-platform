@@ -50,6 +50,9 @@
       - name: "{{ demo_inventory_name }}"
         organization: "{{ demo_organization_name }}"
         state: absent
+      - name: "{{ demo_ai_inventory_name }}"
+        organization: "{{ demo_organization_name }}"
+        state: absent
     controller_projects:
       - name: "{{ demo_state_project_name }}"
         organization: "{{ demo_organization_name }}"
@@ -68,6 +71,9 @@
         organization: "{{ demo_organization_name }}"
         state: absent
       - name: JT - RHEL GitOps Cleanup
+        organization: "{{ demo_organization_name }}"
+        state: absent
+      - name: JT - AI Incident Investigation
         organization: "{{ demo_organization_name }}"
         state: absent
 

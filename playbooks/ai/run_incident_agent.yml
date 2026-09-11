@@ -1,0 +1,33 @@
+# Description: Run the preconfigured CrewAI incident agent on ai-01.
+---
+- name: Run CrewAI incident investigation
+  hosts: ai_control
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Require an incident description
+      ansible.builtin.assert:
+        that:
+          - ai_incident_prompt is defined
+          - ai_incident_prompt | trim | length > 0
+        fail_msg: Launch this job template with an incident description.
+
+    - name: Run the incident agent with its provisioned environment
+      become: true
+      become_user: cloud-user
+      ansible.builtin.shell:
+        cmd: >-
+          set -a;
+          source /home/cloud-user/agentic-aiops/.env;
+          set +a;
+          /home/cloud-user/agentic-aiops/incident_agent.py
+          {{ ai_incident_prompt | quote }}
+      args:
+        executable: /bin/bash
+      register: incident_agent_result
+      changed_when: true
+      no_log: false
+
+    - name: Display the incident agent report
+      ansible.builtin.debug:
+        msg: "{{ incident_agent_result.stdout }}"
