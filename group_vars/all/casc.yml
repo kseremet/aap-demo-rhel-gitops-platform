@@ -119,7 +119,7 @@ eda_rulebook_activations:
     description: Launch the AI investigation job for labeled GitHub issues.
     organization: "{{ demo_organization_name }}"
     project: "{{ demo_eda_project_name }}"
-    rulebook: rulebooks/github_incidents.yml
+    rulebook: github_incidents.yml
     decision_environment: "{{ demo_eda_decision_environment_name }}"
     eda_credentials:
       - "{{ demo_eda_controller_credential_name }}"

@@ -39,6 +39,6 @@ demo_ai_github_api_url: https://api.github.com
 demo_ai_pr_branch_prefix: aiops/
 demo_eda_project_name: RHEL GitOps EDA
 demo_eda_controller_credential_name: EDA Controller Access
-demo_eda_decision_environment_name: Automation Hub Default Decision Environment
+demo_eda_decision_environment_name: default-de
 demo_eda_webhook_port: 5000
 demo_eda_incident_label: ai-investigate
