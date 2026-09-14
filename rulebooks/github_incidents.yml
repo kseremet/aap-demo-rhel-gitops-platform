@@ -1,0 +1,34 @@
+---
+- name: Start AI investigation for GitHub incidents
+  hosts: all
+  sources:
+    - ansible.eda.webhook:
+        host: 0.0.0.0
+        port: "{{ github_webhook_port }}"
+        hmac_secret: "{{ github_webhook_secret }}"
+        hmac_algo: sha256
+        hmac_header: x-hub-signature-256
+        hmac_format: hex
+  rules:
+    - name: Launch AI investigation for labeled issues
+      condition: >-
+        event.payload.action == "opened"
+        and event.payload.issue is defined
+        and event.payload.issue.labels is defined
+        and "{{ github_incident_label }}" in
+        (event.payload.issue.labels | map(attribute="name") | list)
+      action:
+        run_job_template:
+          name: JT - AI Incident Investigation
+          organization: "{{ github_aap_organization }}"
+          job_args:
+            extra_vars:
+              ai_incident_prompt: >-
+                Investigate GitHub issue #{{ event.payload.issue.number }}:
+                {{ event.payload.issue.title }}
+
+                {{ event.payload.issue.body | default('No issue body provided.') }}
+
+                Source issue: {{ event.payload.issue.html_url }}
+                Do not modify the host directly. Propose remediation through a
+                GitOps pull request.

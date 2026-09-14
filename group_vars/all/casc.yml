@@ -95,3 +95,38 @@ controller_templates:
             GitOps remediation pull request. Do not modify the host directly.
           choices: ""
           new_question: true
+
+eda_credentials:
+  - name: "{{ demo_eda_controller_credential_name }}"
+    description: EDA credential for launching the AI incident job template.
+    credential_type: Red Hat Ansible Automation Platform
+    organization: "{{ demo_organization_name }}"
+    inputs:
+      host: "{{ aap_hostname }}/api/controller/"
+      username: "{{ demo_eda_controller_username | default('admin') }}"
+      password: "{{ vault_eda_controller_password }}"
+      verify_ssl: "{{ aap_validate_certs }}"
+
+eda_projects:
+  - name: "{{ demo_eda_project_name }}"
+    description: Rulebooks for the RHEL GitOps AI incident workflow.
+    url: "{{ demo_platform_scm_url }}"
+    organization: "{{ demo_organization_name }}"
+
+eda_rulebook_activations:
+  - name: GitHub AI Incident Issues
+    description: Launch the AI investigation job for labeled GitHub issues.
+    organization: "{{ demo_organization_name }}"
+    project: "{{ demo_eda_project_name }}"
+    rulebook: rulebooks/github_incidents.yml
+    decision_environment: "{{ demo_eda_decision_environment_name }}"
+    eda_credentials:
+      - "{{ demo_eda_controller_credential_name }}"
+    extra_vars:
+      github_webhook_port: "{{ demo_eda_webhook_port }}"
+      github_webhook_secret: "{{ vault_github_webhook_secret }}"
+      github_incident_label: "{{ demo_eda_incident_label }}"
+      github_aap_organization: "{{ demo_organization_name }}"
+    restart_policy: always
+    enabled: true
+    state: present

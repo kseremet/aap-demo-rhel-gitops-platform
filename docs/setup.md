@@ -122,6 +122,28 @@ inventory. Enter the incident description in the survey. The job runs the
 already-provisioned agent on `ai-01`; it does not modify managed hosts directly
 and returns the generated GitHub pull request in the job output.
 
+## EDA GitHub issue trigger
+
+Phase 2 adds an EDA rulebook that listens for GitHub issue webhooks. An issue
+with the `ai-investigate` label launches the same AI incident job template with
+the issue title and body as its prompt.
+
+Set these values before applying CasC:
+
+```yaml
+# encrypted vault.yml
+vault_eda_controller_password: CHANGE_ME
+vault_github_webhook_secret: CHANGE_ME
+```
+
+The EDA credential uses the AAP controller username and password schema needed
+by `run_job_template`; the existing `vault_aap_token` is used for CasC
+authentication and is not silently reused as a password. After CasC creates the
+`GitHub AI Incident Issues` rulebook activation, configure a GitHub webhook for
+the state repository using the activation's webhook URL, the shared secret,
+and the Issues event. Create an issue with the `ai-investigate` label to test
+the flow.
+
 ## Teardown
 
 The existing cleanup playbook removes all VMs described in `vm_specs.yml`,

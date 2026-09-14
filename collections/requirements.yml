@@ -6,5 +6,6 @@ collections:
   - name: kubernetes.core
   - name: community.crypto
   - name: redhat.rhel_system_roles
+  - name: ansible.eda
 
 roles: []

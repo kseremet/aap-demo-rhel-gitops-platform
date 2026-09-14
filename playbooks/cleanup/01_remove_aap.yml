@@ -76,6 +76,18 @@
       - name: JT - AI Incident Investigation
         organization: "{{ demo_organization_name }}"
         state: absent
+    eda_rulebook_activations:
+      - name: GitHub AI Incident Issues
+        organization: "{{ demo_organization_name }}"
+        state: absent
+    eda_projects:
+      - name: "{{ demo_eda_project_name }}"
+        organization: "{{ demo_organization_name }}"
+        state: absent
+    eda_credentials:
+      - name: "{{ demo_eda_controller_credential_name }}"
+        organization: "{{ demo_organization_name }}"
+        state: absent
 
   tasks:
     - name: Remove child AAP objects
