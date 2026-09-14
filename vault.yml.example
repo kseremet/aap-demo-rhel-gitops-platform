@@ -14,9 +14,6 @@ vault_rhc_activation_key: CHANGE_ME
 # GitHub token used by the AI agent to create branches and pull requests.
 vault_github_token: CHANGE_ME
 
-# EDA credential used by rulebooks to launch AAP job templates.
-vault_eda_controller_password: CHANGE_ME
-
 # HMAC secret configured on the GitHub webhook for EDA.
 vault_github_webhook_secret: CHANGE_ME
 

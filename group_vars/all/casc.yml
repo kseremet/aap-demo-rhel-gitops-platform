@@ -103,8 +103,7 @@ eda_credentials:
     organization: "{{ demo_organization_name }}"
     inputs:
       host: "{{ aap_hostname }}/api/controller/"
-      username: "{{ demo_eda_controller_username | default('admin') }}"
-      password: "{{ vault_eda_controller_password }}"
+      oauth_token: "{{ vault_aap_token }}"
       verify_ssl: "{{ aap_validate_certs }}"
 
 eda_projects:
