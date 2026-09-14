@@ -112,7 +112,6 @@ eda_projects:
     url: "{{ demo_platform_scm_url }}"
     scm_branch: "{{ demo_platform_scm_branch }}"
     organization: "{{ demo_organization_name }}"
-    sync: true
 
 eda_rulebook_activations:
   - name: GitHub AI Incident Issues

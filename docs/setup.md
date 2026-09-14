@@ -142,6 +142,10 @@ webhook for the state repository using the activation's webhook URL, the shared
 secret, and the Issues event. Create an issue with the `ai-investigate` label
 to test the flow.
 
+When the rulebook changes, sync the `RHEL GitOps EDA` project in the EDA UI
+before applying CasC again. CasC does not force a project sync on every run, so
+it will not race with an in-progress manual sync.
+
 ## Teardown
 
 The existing cleanup playbook removes all VMs described in `vm_specs.yml`,
