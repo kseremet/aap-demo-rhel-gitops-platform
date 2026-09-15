@@ -102,7 +102,10 @@ eda_credentials:
     credential_type: Red Hat Ansible Automation Platform
     organization: "{{ demo_organization_name }}"
     inputs:
-      host: "{{ aap_hostname }}/api/controller/"
+      host: >-
+        {{ aap_hostname
+           | regex_replace('^(?!https?://)', 'https://')
+           | regex_replace('/+$', '') }}/api/controller/
       oauth_token: "{{ vault_aap_token }}"
       verify_ssl: "{{ aap_validate_certs }}"
 
