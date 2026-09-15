@@ -15,8 +15,18 @@
         event.payload.action == "opened"
         and event.payload.issue is defined
         and event.payload.issue.labels is defined
-        and "{{ github_incident_label }}" in
-        (event.payload.issue.labels | map(attribute="name") | list)
+        and (
+          (event.payload.issue.labels[0] is defined
+           and event.payload.issue.labels[0].name == vars.github_incident_label)
+          or (event.payload.issue.labels[1] is defined
+           and event.payload.issue.labels[1].name == vars.github_incident_label)
+          or (event.payload.issue.labels[2] is defined
+           and event.payload.issue.labels[2].name == vars.github_incident_label)
+          or (event.payload.issue.labels[3] is defined
+           and event.payload.issue.labels[3].name == vars.github_incident_label)
+          or (event.payload.issue.labels[4] is defined
+           and event.payload.issue.labels[4].name == vars.github_incident_label)
+        )
       action:
         run_job_template:
           name: JT - AI Incident Investigation
