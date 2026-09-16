@@ -145,6 +145,8 @@ def _github_request(method, path, payload=None):
 
 def _build_pr_body(agent_body):
     """Make the PR self-contained after this short-lived agent exits."""
+    issue_match = re.search(r"(?:GitHub issue|issue)\s+#(\d+)", INCIDENT_PROBLEM, re.IGNORECASE)
+    issue_number = issue_match.group(1) if issue_match else None
     metadata = {
         "workflow": "incident-investigation",
         "agent_run_id": AGENT_RUN_ID,
@@ -152,9 +154,15 @@ def _build_pr_body(agent_body):
         "target_branch": STATE_REPO_BRANCH,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
+    if issue_number:
+        metadata["issue_number"] = int(issue_number)
+    issue_reference = (
+        f"## Related Issue\n\nRefs #{issue_number}\n\n" if issue_number else ""
+    )
     return (
         "## Incident\n\n"
         f"{INCIDENT_PROBLEM}\n\n"
+        f"{issue_reference}"
         "## Agent Analysis and Proposal\n\n"
         f"{agent_body}\n\n"
         "## Investigation Notes\n\n"
