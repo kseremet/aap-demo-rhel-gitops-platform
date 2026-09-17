@@ -76,6 +76,9 @@
       - name: JT - AI Incident Investigation
         organization: "{{ demo_organization_name }}"
         state: absent
+      - name: JT - AI PR Review
+        organization: "{{ demo_organization_name }}"
+        state: absent
     eda_rulebook_activations:
       - name: GitHub AI Incident Issues
         organization: "{{ demo_organization_name }}"

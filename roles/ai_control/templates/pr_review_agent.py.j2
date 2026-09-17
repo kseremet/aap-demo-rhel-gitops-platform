@@ -1,0 +1,238 @@
+#!{{ ai_control_venv_path }}/bin/python
+"""Process human feedback on an existing AI-generated pull request."""
+
+import argparse
+import base64
+import json
+import os
+import re
+import urllib.parse
+from datetime import datetime, timezone
+from pathlib import Path
+from uuid import uuid4
+
+from crewai import Agent, Crew, LLM, Process, Task
+from crewai.tools import tool
+
+import incident_agent as initial_agent
+
+
+GITHUB_API_URL = initial_agent.GITHUB_API_URL
+GITHUB_TOKEN = initial_agent.GITHUB_TOKEN
+PR_BRANCH_PREFIX = initial_agent.PR_BRANCH_PREFIX
+REVIEW_RUN_ID = str(uuid4())
+REVIEW_EVENT = {}
+PR_NUMBER = None
+PR_CONTEXT = {}
+
+
+def _github_request(method, path, payload=None):
+    return initial_agent._github_request(method, path, payload)
+
+
+def _github_repo():
+    return initial_agent._github_repo()
+
+
+def _load_event(path):
+    with Path(path).open(encoding="utf-8") as stream:
+        event = json.load(stream)
+    return event.get("payload", event)
+
+
+def _get_pr_context():
+    owner, repo = _github_repo()
+    pull = _github_request("GET", f"/repos/{owner}/{repo}/pulls/{PR_NUMBER}")
+    comments = _github_request("GET", f"/repos/{owner}/{repo}/issues/{PR_NUMBER}/comments")
+    reviews = _github_request("GET", f"/repos/{owner}/{repo}/pulls/{PR_NUMBER}/reviews")
+    files = _github_request("GET", f"/repos/{owner}/{repo}/pulls/{PR_NUMBER}/files")
+    return {"pull_request": pull, "comments": comments, "reviews": reviews, "files": files}
+
+
+@tool("Read the complete pull request review context")
+def read_pull_request_context() -> str:
+    """Read the PR metadata, diff files, comments, and review decisions."""
+    return json.dumps(PR_CONTEXT, indent=2)
+
+
+@tool("Read a GitOps state file")
+def read_state_file(relative_path: str) -> str:
+    """Read a text file from the checked-out state repository."""
+    return initial_agent.read_state_file.run(relative_path)
+
+
+@tool("Call a read-only Linux diagnostic tool")
+def call_linux_read_tool(tool_name: str, arguments_json: str) -> str:
+    """Run a read-only Linux MCP diagnostic against a target host."""
+    return initial_agent.call_linux_read_tool.run(tool_name, arguments_json)
+
+
+def _safe_repo_path(relative_path):
+    candidate = Path(relative_path)
+    if not relative_path or candidate.is_absolute() or ".." in candidate.parts:
+        raise ValueError("path must stay inside the state repository")
+    if candidate.parts and candidate.parts[0] == ".git":
+        raise ValueError("Git metadata cannot be changed")
+    return relative_path
+
+
+@tool("Update the existing pull request branch")
+def update_pull_request_file(
+    relative_path: str,
+    file_content: str,
+    commit_message: str,
+) -> str:
+    """Update or create one repository file on the existing PR branch.
+
+    This never creates a new PR and never changes a managed host.
+    """
+    if not PR_NUMBER:
+        return "REFUSED: no pull request was supplied"
+    try:
+        relative_path = _safe_repo_path(relative_path)
+        branch = PR_CONTEXT["pull_request"]["head"]["ref"]
+        owner, repo = _github_repo()
+        try:
+            current = _github_request(
+                "GET",
+                f"/repos/{owner}/{repo}/contents/{urllib.parse.quote(relative_path)}?ref={branch}",
+            )
+            sha = current["sha"]
+        except Exception as exc:
+            if getattr(exc, "code", None) != 404:
+                raise
+            sha = None
+        payload = {
+            "message": commit_message,
+            "content": base64.b64encode(file_content.encode("utf-8")).decode("ascii"),
+            "branch": branch,
+        }
+        if sha:
+            payload["sha"] = sha
+        _github_request("PUT", f"/repos/{owner}/{repo}/contents/{relative_path}", payload)
+        return json.dumps({"updated": relative_path, "branch": branch})
+    except Exception as exc:
+        return f"REFUSED: {exc}"
+
+
+@tool("Comment on the existing pull request")
+def comment_on_pull_request(comment: str) -> str:
+    """Post a revision summary with a marker ignored by the EDA rulebook."""
+    owner, repo = _github_repo()
+    body = (
+        "<!-- aiops-agent-review -->\n"
+        f"## AI Review Run {REVIEW_RUN_ID}\n\n{comment}"
+    )
+    result = _github_request(
+        "POST",
+        f"/repos/{owner}/{repo}/issues/{PR_NUMBER}/comments",
+        {"body": body},
+    )
+    return json.dumps({"comment_url": result["html_url"]})
+
+
+def _llm():
+    return LLM(
+        model=f"{initial_agent.LLM_PROVIDER}/{initial_agent.LLM_MODEL}",
+        api_key=initial_agent.LLM_API_KEY,
+        base_url=initial_agent.LLM_BASE_URL,
+    )
+
+
+def _is_ai_pr():
+    pull = PR_CONTEXT["pull_request"]
+    branch = pull.get("head", {}).get("ref", "")
+    return branch.startswith(PR_BRANCH_PREFIX) or "<!-- aiops-context:" in pull.get("body", "")
+
+
+def run_review(event):
+    global PR_NUMBER, PR_CONTEXT, REVIEW_EVENT
+    REVIEW_EVENT = event
+    PR_NUMBER = (
+        event.get("pull_request", {}).get("number")
+        or event.get("issue", {}).get("number")
+    )
+    if not PR_NUMBER:
+        return "No pull request number was present in the event."
+    PR_CONTEXT = _get_pr_context()
+    if not _is_ai_pr():
+        return f"Skipped PR #{PR_NUMBER}: it is not an AI-generated pull request."
+
+    investigator = Agent(
+        role="Pull Request Review Investigator",
+        goal="Understand human feedback and collect any additional read-only evidence needed.",
+        backstory=(
+            "You review proposed GitOps changes. Read the complete PR conversation and use "
+            "Linux MCP only for evidence. Never modify a host or create a second PR."
+        ),
+        tools=[read_pull_request_context, read_state_file, call_linux_read_tool],
+        llm=_llm(),
+        verbose=True,
+    )
+    implementer = Agent(
+        role="Pull Request Revision Author",
+        goal="Address valid maintainer feedback on the existing PR branch.",
+        backstory=(
+            "You make minimal, reviewable changes on the existing PR branch. You may create "
+            "new state roles or files when justified, but never modify managed hosts directly."
+        ),
+        tools=[read_pull_request_context, read_state_file, update_pull_request_file, comment_on_pull_request],
+        llm=_llm(),
+        verbose=True,
+    )
+    reporter = Agent(
+        role="Pull Request Review Reporter",
+        goal="Summarize what feedback was addressed and what remains for the maintainer.",
+        backstory="You write concise, factual review responses and never claim approval.",
+        tools=[comment_on_pull_request],
+        llm=_llm(),
+        verbose=True,
+    )
+
+    investigate = Task(
+        description=(
+            "Review the new human feedback in the supplied PR context. Determine whether it "
+            "requests a change, asks a question, or rejects the proposal. Re-run read-only "
+            "MCP diagnostics when the feedback requires new evidence."
+        ),
+        expected_output="Feedback interpretation, evidence, and a precise revision plan or no-action decision.",
+        agent=investigator,
+    )
+    revise = Task(
+        description=(
+            "Apply the agreed revision to the existing PR branch only when warranted. Read "
+            "the current PR files first, preserve unrelated content, and then post a concise "
+            "summary comment. If no change is warranted, explain why in the summary comment."
+        ),
+        expected_output="Changed files and commit summary, or a no-change explanation.",
+        agent=implementer,
+        context=[investigate],
+    )
+    report = Task(
+        description="Post the final review-cycle summary for the human maintainer.",
+        expected_output="A concise summary of feedback, evidence, changes, and remaining approval needs.",
+        agent=reporter,
+        context=[investigate, revise],
+    )
+    crew = Crew(
+        agents=[investigator, implementer, reporter],
+        tasks=[investigate, revise, report],
+        process=Process.sequential,
+        verbose=True,
+    )
+    return crew.kickoff()
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Process human feedback on an AI-generated PR")
+    parser.add_argument("--event-file", required=True, help="GitHub webhook payload JSON")
+    args = parser.parse_args()
+    if not initial_agent.LLM_API_KEY:
+        parser.error("AI_LLM_API_KEY is not configured")
+    if not GITHUB_TOKEN:
+        parser.error("GITHUB_TOKEN is not configured")
+    print(run_review(_load_event(args.event_file)))
+
+
+if __name__ == "__main__":
+    main()

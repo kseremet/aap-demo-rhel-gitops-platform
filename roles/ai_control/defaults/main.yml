@@ -34,4 +34,5 @@ ai_control_github_api_url: "{{ demo_ai_github_api_url | default('https://api.git
 ai_control_repo_path: "{{ demo_ai_repo_path | default('/home/' ~ ai_control_user ~ '/agentic-aiops/state-repo') }}"
 ai_control_pr_branch_prefix: "{{ demo_ai_pr_branch_prefix | default('aiops/') }}"
 ai_control_agent_path: "{{ ai_control_app_path }}/incident_agent.py"
+ai_control_review_agent_path: "{{ ai_control_app_path }}/pr_review_agent.py"
 ai_control_mcp_user: "cloud-user"

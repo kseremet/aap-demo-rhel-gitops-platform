@@ -146,6 +146,22 @@ When the rulebook changes, sync the `RHEL GitOps EDA` project in the EDA UI
 before applying CasC again. CasC does not force a project sync on every run, so
 it will not race with an in-progress manual sync.
 
+## PR review feedback loop
+
+The platform also provides `JT - AI PR Review`. Enable these additional GitHub
+webhook events for the existing EDA route:
+
+- Pull requests
+- Pull request reviews
+- Pull request review comments
+- Issue comments
+
+Human review submissions and comments on AI-generated `aiops/` branches launch
+the PR review agent. It reads the conversation and existing diff, performs
+additional read-only MCP diagnostics when needed, updates the existing PR
+branch, and posts a marked summary comment. The rulebook ignores those marked
+agent comments to prevent feedback loops.
+
 ## Teardown
 
 The existing cleanup playbook removes all VMs described in `vm_specs.yml`,

@@ -42,3 +42,48 @@
                 Source issue: {{ event.payload.issue.html_url }}
                 Do not modify the host directly. Propose remediation through a
                 GitOps pull request.
+
+    - name: Launch AI PR review for requested changes
+      condition: >-
+        event.payload.action == "submitted"
+        and event.payload.pull_request is defined
+        and event.payload.review is defined
+        and event.payload.review.state != "approved"
+        and event.payload.pull_request.head.ref is match("aiops/.*")
+      action:
+        run_job_template:
+          name: JT - AI PR Review
+          organization: "{{ github_aap_organization }}"
+          job_args:
+            extra_vars:
+              pr_review_event: "{{ event.payload }}"
+
+    - name: Launch AI PR review for inline comments
+      condition: >-
+        event.payload.action == "created"
+        and event.payload.pull_request is defined
+        and event.payload.comment is defined
+        and event.payload.pull_request.head.ref is match("aiops/.*")
+        and event.payload.comment.body is not regex("aiops-agent-review")
+      action:
+        run_job_template:
+          name: JT - AI PR Review
+          organization: "{{ github_aap_organization }}"
+          job_args:
+            extra_vars:
+              pr_review_event: "{{ event.payload }}"
+
+    - name: Launch AI PR review for top-level PR comments
+      condition: >-
+        event.payload.action == "created"
+        and event.payload.issue is defined
+        and event.payload.issue.pull_request is defined
+        and event.payload.comment is defined
+        and event.payload.comment.body is not regex("aiops-agent-review")
+      action:
+        run_job_template:
+          name: JT - AI PR Review
+          organization: "{{ github_aap_organization }}"
+          job_args:
+            extra_vars:
+              pr_review_event: "{{ event.payload }}"

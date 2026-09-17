@@ -1,0 +1,55 @@
+# Description: Run the PR review agent on ai-01 for human feedback events.
+---
+- name: Run CrewAI PR review workflow
+  hosts: ai_control
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Require a GitHub PR event payload
+      ansible.builtin.assert:
+        that:
+          - pr_review_event is defined
+        fail_msg: Launch this job with a GitHub pull request event payload.
+
+    - name: Create a temporary PR event file
+      become: true
+      become_user: cloud-user
+      ansible.builtin.tempfile:
+        state: file
+        prefix: ai-pr-review-
+        suffix: .json
+      register: pr_review_event_file
+
+    - name: Write the GitHub PR event payload
+      become: true
+      become_user: cloud-user
+      ansible.builtin.copy:
+        content: "{{ pr_review_event | to_nice_json }}"
+        dest: "{{ pr_review_event_file.path }}"
+        mode: "0600"
+
+    - name: Run the PR review agent with its provisioned environment
+      become: true
+      become_user: cloud-user
+      ansible.builtin.shell:
+        cmd: >-
+          set -a;
+          source /home/cloud-user/agentic-aiops/.env;
+          set +a;
+          /home/cloud-user/agentic-aiops/pr_review_agent.py
+          --event-file {{ pr_review_event_file.path | quote }}
+      args:
+        executable: /bin/bash
+      register: pr_review_agent_result
+      changed_when: true
+
+    - name: Display the PR review agent report
+      ansible.builtin.debug:
+        msg: "{{ pr_review_agent_result.stdout }}"
+
+    - name: Remove the temporary PR event file
+      become: true
+      become_user: cloud-user
+      ansible.builtin.file:
+        path: "{{ pr_review_event_file.path }}"
+        state: absent

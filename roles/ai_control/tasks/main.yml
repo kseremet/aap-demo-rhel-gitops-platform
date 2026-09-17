@@ -45,3 +45,16 @@
   tags:
     - ai_control
     - crewai
+
+- name: Deploy CrewAI PR review agent
+  ansible.builtin.template:
+    src: pr_review_agent.py.j2
+    dest: "{{ ai_control_review_agent_path }}"
+    owner: "{{ ai_control_user }}"
+    group: "{{ ai_control_user }}"
+    mode: "0755"
+  no_log: true
+  tags:
+    - ai_control
+    - crewai
+    - pr_review
