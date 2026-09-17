@@ -146,6 +146,10 @@ When the rulebook changes, sync the `RHEL GitOps EDA` project in the EDA UI
 before applying CasC again. CasC does not force a project sync on every run, so
 it will not race with an in-progress manual sync.
 
+The CasC playbook checks for the existing `GitHub AI Incident Issues`
+activation and disables it before applying updates. This handles EDA's
+requirement that stopped activations be disabled before they can be updated.
+
 ## PR review feedback loop
 
 The platform also provides `JT - AI PR Review`. Enable these additional GitHub

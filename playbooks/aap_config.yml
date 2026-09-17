@@ -6,6 +6,7 @@
   gather_facts: false
   collections:
     - infra.aap_configuration
+    - ansible.eda
     - ansible.builtin
   vars_files:
     - ../vault.yml
@@ -39,6 +40,27 @@
     - name: Set AAP authentication variables
       ansible.builtin.set_fact:
         aap_token: "{{ vault_aap_token }}"
+
+    - name: Check for an existing GitHub AI incident activation
+      ansible.eda.rulebook_activation_info:
+        name: GitHub AI Incident Issues
+        controller_host: "{{ aap_hostname }}"
+        controller_token: "{{ aap_token }}"
+        validate_certs: "{{ aap_validate_certs }}"
+      register: _github_ai_activation_info
+      changed_when: false
+      no_log: true
+
+    - name: Disable the existing GitHub AI incident activation before CasC
+      when: _github_ai_activation_info.activations | length > 0
+      ansible.eda.rulebook_activation:
+        name: GitHub AI Incident Issues
+        organization_name: "{{ demo_organization_name }}"
+        state: disabled
+        controller_host: "{{ aap_hostname }}"
+        controller_token: "{{ aap_token }}"
+        validate_certs: "{{ aap_validate_certs }}"
+      no_log: true
 
   roles:
     # NOTE: infra.aap_configuration is validated content.
