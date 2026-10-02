@@ -1,0 +1,76 @@
+---
+schema_version: "2.0.0"
+name: rhel-gitops-pr-review
+description: >-
+  Review maintainer feedback on an AI-generated GitOps pull request with
+  multiple agentic steps and send the resulting change plan to AAP.
+triggers:
+  - id: trigger_eda
+    type: eda_trigger
+    parameters:
+      webhook_path: rhel-gitops-pr-review
+      authorized_service_account_ids: []
+nodes:
+  - id: understand_feedback
+    type: agentic
+    name: Understand maintainer feedback
+    parameters:
+      agent: production://rhel-pr-review-investigator
+      model: gpt-5.6-luna
+      prompt: >-
+        Analyze this GitHub pull-request event and determine what the maintainer
+        is asking for. Use read-only Linux MCP tools only when new host evidence
+        is required. Return JSON with feedback_summary, requested_changes,
+        evidence, and needs_revision. Never modify hosts or repositories.
+
+        Event payload:
+        ${trigger}
+    outputs:
+      feedback: "${result.output}"
+
+  - id: plan_revision
+    type: agentic
+    name: Plan the minimal repository revision
+    parameters:
+      agent: production://rhel-pr-revision-planner
+      model: gpt-5.6-luna
+      prompt: >-
+        Based on the feedback below, produce only JSON in this shape:
+        {"operation":"update_pr","owner":"...","repository":"...",
+        "base_branch":"main","branch":"...","pull_request_number":0,
+        "pr_title":"...","commit_message":"...","files":[{"path":"...",
+        "content":"..."}],"comment":"..."}. Preserve unrelated files and
+        do not claim that validation or approval occurred unless the event proves
+        it.
+
+        Feedback analysis:
+        ${understand_feedback.feedback}
+    outputs:
+      ao_plan: "${result.output}"
+
+  - id: apply_revision
+    type: aap_job_template
+    name: Apply the pull-request revision through AAP
+    parameters:
+      job_template_name: JT - AO GitOps Action
+      organization_name: RHEL GitOps
+      extra_vars:
+        ao_plan: ${plan_revision.ao_plan}
+    outputs:
+      job_id: "${result.job_id}"
+      job_status: "${result.job_status}"
+      artifacts: "${result.artifacts}"
+    settings:
+      timeout: 1800
+      retry_policy:
+        max_retries: 1
+        initial_interval: 5
+        max_interval: 30
+        backoff_coefficient: 2.0
+edges:
+  - from: trigger_eda
+    to: understand_feedback
+  - from: understand_feedback
+    to: plan_revision
+  - from: plan_revision
+    to: apply_revision

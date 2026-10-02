@@ -1,0 +1,124 @@
+# Description: Configure Automation Orchestrator with the demo project and
+# version-controlled agentic workflows. Run after the AO instance is available.
+# This playbook uses the local admin login only for AO configuration; EDA trigger
+# calls remain unauthenticated because these are disposable demo workflows.
+---
+- name: Configure Automation Orchestrator workflows
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - ../vault.yml
+    - ../group_vars/all/demo_variables.yml
+  vars:
+    ao_api_base_url: "{{ demo_ao_url | regex_replace('/+$', '') }}/api/v1"
+    ao_workflow_definitions:
+      - name: rhel-gitops-incident-investigation
+        path: "{{ playbook_dir }}/../workflows/automation-orchestrator/rhel-gitops-incident.yaml"
+        webhook_path: "{{ demo_ao_incident_eda_trigger_path }}"
+      - name: rhel-gitops-pr-review
+        path: "{{ playbook_dir }}/../workflows/automation-orchestrator/rhel-gitops-pr-review.yaml"
+        webhook_path: "{{ demo_ao_pr_review_eda_trigger_path }}"
+  tasks:
+    - name: Validate Automation Orchestrator configuration inputs
+      ansible.builtin.assert:
+        that:
+          - demo_ao_url is defined
+          - demo_ao_url != 'CHANGE_ME_AUTOMATION_ORCHESTRATOR_URL'
+          - demo_ao_username | default('admin') | length > 0
+          - vault_ao_admin_password is defined
+          - vault_ao_admin_password not in ['', 'CHANGE_ME']
+          - demo_ao_project_name | length > 0
+        fail_msg: Configure the AO URL, admin password, and project name before running ao_config.yml.
+      no_log: true
+      tags:
+        - ao
+        - validation
+
+    - name: Authenticate to Automation Orchestrator as the local admin
+      ansible.builtin.uri:
+        url: "{{ ao_api_base_url }}/auth/login"
+        method: POST
+        body_format: json
+        body:
+          username: "{{ demo_ao_username | default('admin') }}"
+          password: "{{ vault_ao_admin_password }}"
+        status_code: 200
+        return_content: true
+        validate_certs: "{{ demo_ao_validate_certs }}"
+      register: _ao_login
+      no_log: true
+      tags:
+        - ao
+        - authentication
+
+    - name: Resolve the AO access token
+      ansible.builtin.set_fact:
+        ao_access_token: "{{ _ao_login.json.access_token }}"
+      no_log: true
+      tags:
+        - ao
+        - authentication
+
+    - name: Find the demo AO project
+      ansible.builtin.uri:
+        url: "{{ ao_api_base_url }}/projects?name={{ demo_ao_project_name | urlencode }}&limit=100"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ ao_access_token }}"
+        status_code: 200
+        return_content: true
+        validate_certs: "{{ demo_ao_validate_certs }}"
+      register: _ao_projects
+      no_log: true
+      tags:
+        - ao
+        - project
+
+    - name: Create the demo AO project when absent
+      ansible.builtin.uri:
+        url: "{{ ao_api_base_url }}/projects"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ ao_access_token }}"
+        body_format: json
+        body:
+          name: "{{ demo_ao_project_name }}"
+          description: RHEL GitOps agentic workflows managed by Ansible.
+          labels:
+            managed_by: ansible
+            demo: rhel-gitops
+        status_code: 201
+        return_content: true
+        validate_certs: "{{ demo_ao_validate_certs }}"
+      register: _ao_created_project
+      when: >-
+        (_ao_projects.json.resources | default([])
+         | selectattr('name', 'equalto', demo_ao_project_name) | list | length) == 0
+      no_log: true
+      tags:
+        - ao
+        - project
+
+    - name: Resolve the demo AO project ID
+      ansible.builtin.set_fact:
+        ao_project_id: >-
+          {{ _ao_created_project.json.id
+             if (_ao_created_project is defined and _ao_created_project.json is defined)
+             else ((_ao_projects.json.resources
+                    | selectattr('name', 'equalto', demo_ao_project_name)
+                    | list | first).id) }}
+      no_log: true
+      tags:
+        - ao
+        - project
+
+    - name: Import or update the version-controlled AO workflows
+      ansible.builtin.include_tasks: ao_import_workflow.yml
+      loop: "{{ ao_workflow_definitions }}"
+      loop_control:
+        loop_var: ao_workflow
+        label: "{{ ao_workflow.name }}"
+      tags:
+        - ao
+        - workflows

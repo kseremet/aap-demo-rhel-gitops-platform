@@ -1,0 +1,145 @@
+# Description: Apply a structured Automation Orchestrator GitOps plan.
+# This job is the controlled repository-write boundary for AO workflows. It
+# never connects to managed hosts; it only creates a GitHub branch, updates the
+# requested repository files, and opens or comments on a pull request.
+---
+- name: Apply an Automation Orchestrator GitOps plan
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - ../../vault.yml
+    - ../../group_vars/all/demo_variables.yml
+  vars:
+    github_api_base_url: "{{ demo_ai_github_api_url | default('https://api.github.com') | regex_replace('/+$', '') }}"
+  tasks:
+    - name: Require a structured GitOps plan
+      ansible.builtin.assert:
+        that:
+          - ao_plan is defined
+          - github_api_token is defined
+        fail_msg: The AO workflow must provide ao_plan and the GitHub API credential.
+      no_log: true
+      tags:
+        - ao
+        - github
+        - validation
+
+    - name: Normalize the structured GitOps plan
+      ansible.builtin.set_fact:
+        _ao_plan: "{{ ao_plan if ao_plan is mapping else (ao_plan | from_json) }}"
+      no_log: true
+      tags:
+        - ao
+        - github
+
+    - name: Validate the GitOps plan fields
+      ansible.builtin.assert:
+        that:
+          - _ao_plan.owner is defined
+          - _ao_plan.repository is defined
+          - _ao_plan.base_branch is defined
+          - _ao_plan.branch is defined
+          - _ao_plan.files is defined
+          - _ao_plan.files is sequence
+          - _ao_plan.files | length > 0
+        fail_msg: The AO plan must define owner, repository, base_branch, branch, and files.
+      no_log: true
+      tags:
+        - ao
+        - github
+        - validation
+
+    - name: Read the base branch reference
+      ansible.builtin.uri:
+        url: >-
+          {{ github_api_base_url }}/repos/{{ _ao_plan.owner }}/{{ _ao_plan.repository
+          }}/git/ref/heads/{{ _ao_plan.base_branch }}
+        method: GET
+        headers:
+          Accept: application/vnd.github+json
+          Authorization: "Bearer {{ github_api_token }}"
+          X-GitHub-Api-Version: "2022-11-28"
+        status_code: 200
+        return_content: true
+      register: _github_base_ref
+      no_log: true
+      when: _ao_plan.operation | default('create_pr') == 'create_pr'
+      tags:
+        - ao
+        - github
+
+    - name: Create the GitOps pull-request branch
+      ansible.builtin.uri:
+        url: "{{ github_api_base_url }}/repos/{{ _ao_plan.owner }}/{{ _ao_plan.repository }}/git/refs"
+        method: POST
+        headers:
+          Accept: application/vnd.github+json
+          Authorization: "Bearer {{ github_api_token }}"
+          X-GitHub-Api-Version: "2022-11-28"
+        body_format: json
+        body:
+          ref: "refs/heads/{{ _ao_plan.branch }}"
+          sha: "{{ _github_base_ref.json.object.sha }}"
+        status_code: 201
+      no_log: true
+      when: _ao_plan.operation | default('create_pr') == 'create_pr'
+      tags:
+        - ao
+        - github
+
+    - name: Update each planned GitOps file
+      ansible.builtin.include_tasks: ao_update_github_file.yml
+      loop: "{{ _ao_plan.files }}"
+      loop_control:
+        loop_var: _ao_file
+        label: "{{ _ao_file.path }}"
+      tags:
+        - ao
+        - github
+
+    - name: Create the GitOps pull request
+      ansible.builtin.uri:
+        url: "{{ github_api_base_url }}/repos/{{ _ao_plan.owner }}/{{ _ao_plan.repository }}/pulls"
+        method: POST
+        headers:
+          Accept: application/vnd.github+json
+          Authorization: "Bearer {{ github_api_token }}"
+          X-GitHub-Api-Version: "2022-11-28"
+        body_format: json
+        body:
+          title: "{{ _ao_plan.pr_title }}"
+          head: "{{ _ao_plan.branch }}"
+          base: "{{ _ao_plan.base_branch }}"
+          body: "{{ _ao_plan.pr_body | default('Created by the Automation Orchestrator GitOps workflow.') }}"
+        status_code: 201
+        return_content: true
+      register: _github_pr_response
+      no_log: true
+      when: _ao_plan.operation | default('create_pr') == 'create_pr'
+      tags:
+        - ao
+        - github
+
+    - name: Add the workflow summary comment to an existing pull request
+      ansible.builtin.uri:
+        url: >-
+          {{ github_api_base_url }}/repos/{{ _ao_plan.owner }}/{{ _ao_plan.repository
+          }}/issues/{{ _ao_plan.pull_request_number }}/comments
+        method: POST
+        headers:
+          Accept: application/vnd.github+json
+          Authorization: "Bearer {{ github_api_token }}"
+          X-GitHub-Api-Version: "2022-11-28"
+        body_format: json
+        body:
+          body: "{{ _ao_plan.comment }}"
+        status_code: 201
+      no_log: true
+      when:
+        - _ao_plan.operation | default('create_pr') == 'update_pr'
+        - _ao_plan.pull_request_number is defined
+        - _ao_plan.comment is defined
+      tags:
+        - ao
+        - github

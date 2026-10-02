@@ -15,6 +15,28 @@ controller_credentials:
               and vault_demo_ssh_private_key not in ['', 'CHANGE_ME']
            else lookup('ansible.builtin.file', demo_ssh_private_key_path) }}
     no_log: true
+  - name: GitHub API Access
+    description: GitHub token used by the Automation Orchestrator GitOps action job.
+    organization: "{{ demo_organization_name }}"
+    credential_type: GitHub API Token
+    inputs:
+      github_token: "{{ vault_github_token }}"
+    no_log: true
+controller_credential_types:
+  - name: GitHub API Token
+    description: Token injected into GitHub API action jobs.
+    kind: cloud
+    inputs:
+      fields:
+        - id: github_token
+          type: string
+          label: GitHub API token
+          secret: true
+      required:
+        - github_token
+    injectors:
+      extra_vars:
+        github_api_token: "{{ '{{ github_token }}' }}"
 
 controller_inventories:
   - name: "{{ demo_inventory_name }}"
@@ -105,6 +127,24 @@ controller_templates:
     credentials:
       - "{{ demo_machine_credential_name }}"
     ask_variables_on_launch: true
+  - name: JT - AO Event Bridge
+    description: Forward an EDA event to an Automation Orchestrator EDA trigger.
+    organization: "{{ demo_organization_name }}"
+    job_type: run
+    inventory: "{{ demo_ai_inventory_name }}"
+    project: "{{ demo_platform_project_name }}"
+    playbook: playbooks/ai/forward_event_to_ao.yml
+    extra_vars:
+      ao_webhook_base_url: "{{ demo_ao_url }}"
+  - name: JT - AO GitOps Action
+    description: Create or update a GitHub pull request from an AO structured plan.
+    organization: "{{ demo_organization_name }}"
+    job_type: run
+    inventory: "{{ demo_ai_inventory_name }}"
+    project: "{{ demo_platform_project_name }}"
+    playbook: playbooks/ai/run_ao_gitops_action.yml
+    credentials:
+      - GitHub API Access
 
 eda_credentials:
   - name: "{{ demo_eda_controller_credential_name }}"
@@ -140,6 +180,9 @@ eda_rulebook_activations:
       github_webhook_secret: "{{ vault_github_webhook_secret }}"
       github_incident_label: "{{ demo_eda_incident_label }}"
       github_aap_organization: "{{ demo_organization_name }}"
+      ai_backend: "{{ demo_ai_backend }}"
+      ao_incident_webhook_path: "{{ demo_ao_incident_eda_trigger_path }}"
+      ao_pr_review_webhook_path: "{{ demo_ao_pr_review_eda_trigger_path }}"
     restart_policy: always
     enabled: true
     state: present

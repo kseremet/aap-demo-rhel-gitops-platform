@@ -85,7 +85,8 @@ ansible-playbook playbooks/bootstrap.yml --vault-id @prompt
 
 The key is created under ignored `runtime/`. Its public half is injected into
 the VMs via cloud-init. The private half is imported into the AAP Machine
-Credential and discarded from the job workspace.
+Credential and copied into an OpenShift Secret for the containerized MCP server;
+the key file remains ignored and must never be committed.
 
 ### 6. Inspect the result
 
@@ -174,7 +175,7 @@ Resetting the platform lab does not reset or rewrite the state repository.
 | `context/` | Execution Environment definition for AAP |
 
 The bootstrap also runs `playbooks/setup/04_configure_ai_vm.yml` to prepare the
-AI control VM and its SSH/MCP runtime.
+AI control VM, deploy the in-namespace Linux MCP service, and configure CrewAI.
 
 ## Job Templates
 
@@ -186,6 +187,7 @@ After CasC is applied, the following AAP job templates are available:
 | JT - RHEL GitOps Provision VMs | `playbooks/setup/02_provision_vms.yml` | Create KubeVirt VMs |
 | JT - RHEL GitOps Discover Inventory | `playbooks/setup/03_discover_inventory.yml` | Populate inventory from VMI facts |
 | JT - RHEL GitOps Cleanup | `playbooks/cleanup.yml` | Full lab teardown |
+| JT - AO Event Bridge | `playbooks/ai/forward_event_to_ao.yml` | Forward EDA events to Automation Orchestrator |
 
 ## Troubleshooting
 
@@ -211,10 +213,22 @@ Python 3.12, creates `/home/cloud-user/.venv`, installs the Linux MCP server and
 CrewAI dependencies, and configures SSH aliases to `web-01`, `web-02`, `db-01`,
 and `app-01`.
 
-The Linux MCP server runs locally in stdio mode and uses passwordless SSH to
-perform diagnostics on the selected target. No MCP server is installed on the
-fleet nodes. The future CrewAI service reads its model settings from
-`/home/cloud-user/agentic-aiops/.env`.
+The Linux MCP server remains installed locally in stdio mode and uses
+passwordless SSH to perform diagnostics on the selected target. The bootstrap
+also deploys a one-replica HTTP MCP service in the same OpenShift namespace as
+the AI VM. CrewAI uses that containerized service by default; set
+`demo_ai_mcp_mode: local` in `group_vars/all/demo_variables.yml` to switch back
+to the VM-local server. The service uses an OpenShift Secret for its SSH key and
+`emptyDir` for file logs; container console logs remain available through
+`oc logs`. No MCP server is installed on the fleet nodes. CrewAI settings are
+read from `/home/cloud-user/agentic-aiops/.env`.
+
+GitHub incident and PR events use Automation Orchestrator by default. Set
+`demo_ai_backend: crewai` to keep the existing AI VM workflow as a fallback.
+CasC creates `JT - AO Event Bridge`, which forwards filtered EDA events to the
+Automation Orchestrator EDA trigger. Run `playbooks/ao_config.yml` with the AO
+URL and local admin password to create the demo AO project and import the
+version-controlled workflows.
 
 Set `demo_ai_llm_provider`, `demo_ai_llm_model`, and `demo_ai_llm_base_url` in
 `group_vars/all/demo_variables.yml`. Set `vault_ai_llm_api_key` in `vault.yml`

@@ -1,0 +1,24 @@
+# Generate one container-side SSH alias for each discovered fleet guest so the
+# CrewAI tool host names resolve to current management addresses.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ ai_control_mcp_configmap_name }}
+  namespace: {{ openshift_vm_namespace }}
+data:
+  config: |
+    Host *
+      User {{ ai_control_mcp_container_user }}
+      IdentityFile {{ ai_control_mcp_key_path }}
+      IdentitiesOnly yes
+{% for host in ai_control_target_hosts %}
+    Host {{ host.name }}
+      HostName {{ host.ansible_host }}
+{% endfor %}
+  policy.yaml: |
+    rules:
+      - all_users: true
+        host: "*"
+        tools:
+          - "*"
+        action: ssh_default

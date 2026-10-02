@@ -4,9 +4,6 @@
   hosts: localhost
   connection: local
   gather_facts: false
-  collections:
-    - kubevirt.core
-    - ansible.builtin
   vars_files:
     - ../../vault.yml
     - ../../group_vars/all/demo_variables.yml
@@ -20,6 +17,43 @@
         fail_msg: >-
           VM deletion is destructive. Re-run with
           -e demo_destroy_confirm=true.
+
+    # Remove the MCP Secret and workload before deleting the SSH key and VMs.
+    - name: Remove the containerized Linux MCP resources
+      kubernetes.core.k8s:
+        api_version: "{{ item.api_version }}"
+        kind: "{{ item.kind }}"
+        name: "{{ item.name }}"
+        namespace: "{{ openshift_vm_namespace }}"
+        state: absent
+        host: "{{ openshift_api_url }}"
+        api_key: "{{ vault_openshift_token }}"
+        validate_certs: "{{ openshift_validate_certs }}"
+      loop:
+        - api_version: apps/v1
+          kind: Deployment
+          name: linux-mcp-server
+        - api_version: v1
+          kind: Service
+          name: linux-mcp-server
+        - api_version: v1
+          kind: ConfigMap
+          name: linux-mcp-server-config
+        - api_version: v1
+          kind: ConfigMap
+          name: linux-mcp-server
+        - api_version: v1
+          kind: Secret
+          name: linux-mcp-server-ssh
+        - api_version: v1
+          kind: PersistentVolumeClaim
+          name: linux-mcp-server-logs
+      loop_control:
+        label: "{{ item.kind }}/{{ item.name }}"
+      tags:
+        - cleanup
+        - openshift
+        - mcp
 
     - name: Delete KubeVirt VirtualMachines
       kubevirt.core.kubevirt_vm:

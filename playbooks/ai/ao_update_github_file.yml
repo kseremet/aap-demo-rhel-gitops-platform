@@ -1,0 +1,50 @@
+---
+- name: Read the current GitOps file from the working branch
+  ansible.builtin.uri:
+    url: >-
+      {{ github_api_base_url }}/repos/{{ _ao_plan.owner }}/{{ _ao_plan.repository
+      }}/contents/{{ _ao_file.path }}?ref={{ _ao_plan.branch }}
+    method: GET
+    headers:
+      Accept: application/vnd.github+json
+      Authorization: "Bearer {{ github_api_token }}"
+      X-GitHub-Api-Version: "2022-11-28"
+    status_code: [200, 404]
+    return_content: true
+  register: _github_current_file
+  no_log: true
+
+- name: Write the planned GitOps file
+  ansible.builtin.uri:
+    url: "{{ github_api_base_url }}/repos/{{ _ao_plan.owner }}/{{ _ao_plan.repository }}/contents/{{ _ao_file.path }}"
+    method: PUT
+    headers:
+      Accept: application/vnd.github+json
+      Authorization: "Bearer {{ github_api_token }}"
+      X-GitHub-Api-Version: "2022-11-28"
+    body_format: json
+    body:
+      message: "{{ _ao_plan.commit_message | default(_ao_plan.pr_title) }}"
+      content: "{{ _ao_file.content | b64encode }}"
+      branch: "{{ _ao_plan.branch }}"
+      sha: "{{ _github_current_file.json.sha }}"
+    status_code: 200
+  when: _github_current_file.status == 200
+  no_log: true
+
+- name: Create the planned GitOps file
+  ansible.builtin.uri:
+    url: "{{ github_api_base_url }}/repos/{{ _ao_plan.owner }}/{{ _ao_plan.repository }}/contents/{{ _ao_file.path }}"
+    method: PUT
+    headers:
+      Accept: application/vnd.github+json
+      Authorization: "Bearer {{ github_api_token }}"
+      X-GitHub-Api-Version: "2022-11-28"
+    body_format: json
+    body:
+      message: "{{ _ao_plan.commit_message | default(_ao_plan.pr_title) }}"
+      content: "{{ _ao_file.content | b64encode }}"
+      branch: "{{ _ao_plan.branch }}"
+    status_code: 201
+  when: _github_current_file.status == 404
+  no_log: true

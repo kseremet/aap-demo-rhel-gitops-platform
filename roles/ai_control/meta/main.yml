@@ -2,7 +2,7 @@
 galaxy_info:
   role_name: ai_control
   author: RHEL GitOps demo
-  description: Configure the AI control VM for CrewAI and Linux MCP diagnostics.
+  description: Configure CrewAI and local plus containerized Linux MCP diagnostics.
   license: MIT
   min_ansible_version: "2.18"
   platforms:

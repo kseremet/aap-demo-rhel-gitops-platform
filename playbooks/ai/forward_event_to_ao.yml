@@ -1,0 +1,50 @@
+# Description: Forward an EDA event to an Automation Orchestrator EDA trigger.
+# EDA remains the GitHub ingress and filtering layer; this playbook forwards the
+# original event payload to the demo's unauthenticated AO EDA trigger.
+---
+- name: Forward an event to Automation Orchestrator
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - ../../vault.yml
+    - ../../group_vars/all/demo_variables.yml
+  tasks:
+    - name: Validate Automation Orchestrator bridge inputs
+      ansible.builtin.assert:
+        that:
+          - ao_event_payload is defined
+          - ao_webhook_base_url is defined
+          - ao_webhook_path is defined
+          - ao_webhook_path | length > 0
+        fail_msg: Configure the Automation Orchestrator URL and EDA trigger path.
+      no_log: true
+      tags:
+        - ao
+        - validation
+
+    - name: Forward the original EDA payload to Automation Orchestrator
+      ansible.builtin.uri:
+        url: >-
+          {{ ao_webhook_base_url | regex_replace('/+$', '')
+             }}/api/v1/webhooks/eda/{{ ao_webhook_path }}
+        method: POST
+        body_format: json
+        body: "{{ ao_event_payload }}"
+        status_code: [200, 201, 202]
+        return_content: true
+        validate_certs: "{{ aap_validate_certs }}"
+      register: _ao_forward_response
+      no_log: true
+      tags:
+        - ao
+        - event
+
+    - name: Report the Automation Orchestrator workflow handoff
+      ansible.builtin.debug:
+        msg:
+          status: "{{ _ao_forward_response.status }}"
+          response: "{{ _ao_forward_response.json | default(_ao_forward_response.content | default('')) }}"
+      tags:
+        - ao
+        - event

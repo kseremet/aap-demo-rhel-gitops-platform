@@ -4,6 +4,7 @@
 import argparse
 import asyncio
 import base64
+from contextlib import AsyncExitStack, asynccontextmanager
 import json
 import os
 import re
@@ -17,13 +18,21 @@ from uuid import uuid4
 
 from crewai import Agent, Crew, LLM, Process, Task
 from crewai.tools import tool
+from dotenv import load_dotenv
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from mcp.client.streamable_http import streamablehttp_client
 
 
+load_dotenv("{{ ai_control_app_path }}/.env")
+
+MCP_MODE = os.environ.get("AI_MCP_MODE", "container").strip().lower()
 MCP_COMMAND = os.environ.get(
     "LINUX_MCP_COMMAND", "/home/cloud-user/.venv/bin/linux-mcp-server"
 )
+MCP_URL = os.environ.get("LINUX_MCP_URL", "http://linux-mcp-server:8000/mcp")
+if MCP_MODE not in {"container", "local"}:
+    raise ValueError("AI_MCP_MODE must be either 'container' or 'local'")
 STATE_REPO_URL = os.environ["STATE_REPO_URL"]
 STATE_REPO_BRANCH = os.environ.get("STATE_REPO_BRANCH", "main")
 STATE_REPO_PATH = Path(os.environ["STATE_REPO_PATH"])
@@ -43,25 +52,40 @@ def _text(result):
 
 
 class LinuxMCP:
-    """Short-lived stdio MCP sessions keep each diagnostic call isolated."""
+    """Open an isolated stdio or Streamable HTTP MCP session per operation."""
+
+    @asynccontextmanager
+    async def _session(self):
+        async with AsyncExitStack() as stack:
+            # Keep stdio for the VM-local option and use Streamable HTTP for the
+            # in-namespace Service; both branches expose the same MCP session API.
+            if MCP_MODE == "local":
+                params = StdioServerParameters(command=MCP_COMMAND, args=[])
+                read_stream, write_stream = await stack.enter_async_context(
+                    stdio_client(params)
+                )
+            else:
+                read_stream, write_stream, _ = await stack.enter_async_context(
+                    streamablehttp_client(MCP_URL)
+                )
+
+            session = await stack.enter_async_context(
+                ClientSession(read_stream, write_stream)
+            )
+            await session.initialize()
+            yield session
 
     async def _call(self, name, arguments):
-        params = StdioServerParameters(command=MCP_COMMAND, args=[])
-        async with stdio_client(params) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                return await session.call_tool(name, arguments)
+        async with self._session() as session:
+            return await session.call_tool(name, arguments)
 
     def call(self, name, arguments):
         return asyncio.run(self._call(name, arguments))
 
     def tools(self):
         async def discover():
-            params = StdioServerParameters(command=MCP_COMMAND, args=[])
-            async with stdio_client(params) as (read, write):
-                async with ClientSession(read, write) as session:
-                    await session.initialize()
-                    return await session.list_tools()
+            async with self._session() as session:
+                return await session.list_tools()
 
         return asyncio.run(discover()).tools
 

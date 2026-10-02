@@ -1,0 +1,103 @@
+---
+schema_version: "2.0.0"
+name: rhel-gitops-incident-investigation
+description: >-
+  Investigate a GitHub incident with multiple read-only Linux MCP agents and
+  send a structured GitOps plan to AAP for pull-request creation.
+triggers:
+  - id: trigger_eda
+    type: eda_trigger
+    parameters:
+      webhook_path: rhel-gitops-incident
+      authorized_service_account_ids: []
+nodes:
+  - id: investigate_host
+    type: agentic
+    name: Investigate the reported host
+    parameters:
+      agent: production://rhel-incident-investigator
+      model: gpt-5.6-luna
+      prompt: >-
+        Investigate the GitHub incident payload below. Use only the selected
+        read-only Linux MCP tools. Identify the target host, collect direct
+        evidence, and return JSON with target_host, evidence, observed_values,
+        and unanswered_questions. Do not modify any host or repository.
+
+        Incident payload:
+        ${trigger}
+    outputs:
+      investigation: "${result.output}"
+
+  - id: analyze_gitops_state
+    type: agentic
+    name: Analyze GitOps state and root cause
+    parameters:
+      agent: production://rhel-gitops-analyst
+      model: gpt-5.6-luna
+      prompt: >-
+        Analyze the investigation below against the GitOps repository context
+        available to you. Explain variable precedence and determine the minimum
+        safe repository change. Return JSON with root_cause, relevant_files,
+        proposed_change, confidence, and validation_plan. Do not modify hosts or
+        repositories.
+
+        Investigation:
+        ${investigate_host.investigation}
+    outputs:
+      analysis: "${result.output}"
+
+  - id: prepare_gitops_plan
+    type: agentic
+    name: Prepare the GitOps pull-request plan
+    parameters:
+      agent: production://rhel-gitops-remediation-planner
+      model: gpt-5.6-luna
+      prompt: >-
+        Create one minimal, reviewable GitHub pull-request plan from the
+        investigation and root-cause analysis. Return only JSON with this shape:
+        {"operation":"create_pr","owner":"...","repository":"...",
+        "base_branch":"main","branch":"aiops/incident-remediation",
+        "pr_title":"...","pr_body":"...","commit_message":"...",
+        "files":[{"path":"...","content":"..."}],
+        "validation_plan":"..."}. Preserve unrelated repository content and
+        never include host-side commands.
+
+        Original event:
+        ${trigger}
+
+        Investigation:
+        ${investigate_host.investigation}
+
+        Root-cause analysis:
+        ${analyze_gitops_state.analysis}
+    outputs:
+      ao_plan: "${result.output}"
+
+  - id: create_gitops_pr
+    type: aap_job_template
+    name: Create the GitOps pull request through AAP
+    parameters:
+      job_template_name: JT - AO GitOps Action
+      organization_name: RHEL GitOps
+      extra_vars:
+        ao_plan: ${prepare_gitops_plan.ao_plan}
+    outputs:
+      job_id: "${result.job_id}"
+      job_status: "${result.job_status}"
+      artifacts: "${result.artifacts}"
+    settings:
+      timeout: 1800
+      retry_policy:
+        max_retries: 1
+        initial_interval: 5
+        max_interval: 30
+        backoff_coefficient: 2.0
+edges:
+  - from: trigger_eda
+    to: investigate_host
+  - from: investigate_host
+    to: analyze_gitops_state
+  - from: analyze_gitops_state
+    to: prepare_gitops_plan
+  - from: prepare_gitops_plan
+    to: create_gitops_pr

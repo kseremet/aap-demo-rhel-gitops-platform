@@ -1,13 +1,12 @@
 # Description: Configure the AI control VM after VM discovery.
-# The VM runs CrewAI and one local Linux MCP server; MCP reaches the RHEL fleet
-# over passwordless SSH. Safe to re-run after the VM has been provisioned.
+# The VM keeps a local Linux MCP server and CrewAI client; the play also deploys
+# an HTTP MCP service in OpenShift and selects the default backend from demo vars.
+# Safe to re-run after VM provisioning; OpenShift resources use the lab namespace.
 ---
 - name: Register the discovered AI control VM for configuration
   hosts: localhost
   connection: local
   gather_facts: false
-  collections:
-    - ansible.builtin
   vars_files:
     - ../../vault.yml
     - ../../group_vars/all/demo_variables.yml
@@ -51,8 +50,6 @@
   hosts: ai_control_runtime
   become: true
   gather_facts: true
-  collections:
-    - ansible.builtin
   vars_files:
     - ../../vault.yml
     - ../../group_vars/all/demo_variables.yml

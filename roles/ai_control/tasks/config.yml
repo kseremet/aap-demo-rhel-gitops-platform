@@ -38,8 +38,9 @@
 
           source {{ ai_control_venv_path }}/bin/activate
 
-      The Linux MCP server runs locally in stdio mode and reaches targets using
-      the SSH aliases configured in `~/.ssh/config`.
+      Both Linux MCP backends are installed: the VM-local stdio server and the
+      in-namespace OpenShift HTTP service. CrewAI uses the backend selected by
+      `demo_ai_mcp_mode`; both reach the fleet through SSH aliases.
 
       Run the manual investigation agent with:
 

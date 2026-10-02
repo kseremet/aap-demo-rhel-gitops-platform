@@ -1,12 +1,37 @@
 ---
-# AI control-system defaults. The control VM runs the MCP server locally and
-# uses SSH aliases to inspect the RHEL fleet.
+# AI control-system defaults. CrewAI can use the containerized HTTP MCP service
+# or the local stdio server; both connect to the fleet through SSH aliases.
 ai_control_user: cloud-user
 ai_control_venv_path: "/home/{{ ai_control_user }}/.venv"
 ai_control_app_path: "/home/{{ ai_control_user }}/agentic-aiops"
 ai_control_ssh_dir: "/home/{{ ai_control_user }}/.ssh"
 ai_control_private_key_path: "{{ ai_control_ssh_dir }}/id_ed25519"
 ai_control_known_hosts_path: "{{ ai_control_ssh_dir }}/known_hosts"
+# CrewAI backend selected in demo variables (`container` or `local`).
+ai_control_mcp_mode: "{{ demo_ai_mcp_mode | default('container') }}"
+# In-namespace HTTP URL used when the container backend is selected.
+ai_control_mcp_url: "{{ demo_ai_mcp_url | default('http://linux-mcp-server:8000/mcp') }}"
+# Container image used by the always-deployed OpenShift MCP service.
+ai_control_mcp_container_image: "{{ demo_ai_mcp_container_image | default('quay.io/redhat-services-prod/rhel-lightspeed-tenant/linux-mcp-server:latest') }}"
+# Names for the OpenShift workload, client Service, config, and SSH Secret.
+ai_control_mcp_deployment_name: linux-mcp-server
+ai_control_mcp_service_name: linux-mcp-server
+ai_control_mcp_configmap_name: linux-mcp-server-config
+ai_control_mcp_secret_name: linux-mcp-server-ssh
+# SSH identity and filesystem paths inside the MCP container.
+ai_control_mcp_container_user: cloud-user
+ai_control_mcp_log_dir: /var/lib/mcp/.local/share/linux-mcp-server/logs
+ai_control_mcp_config_dir: /var/lib/mcp/.ssh
+ai_control_mcp_policy_path: /var/lib/mcp/.ssh/policy.yaml
+ai_control_mcp_key_path: /var/lib/mcp/.ssh/id_ed25519
+# Initial modest resource budget for the single-replica demo service.
+ai_control_mcp_resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
 
 # Keep these versions aligned with the validated RHEL MCP reference setup.
 ai_control_pip_packages:

@@ -19,3 +19,6 @@ vault_github_webhook_secret: CHANGE_ME
 
 # LLM API key used by the future CrewAI service on ai-01.
 vault_ai_llm_api_key: CHANGE_ME
+
+# Automation Orchestrator local admin password used by AO CasC.
+vault_ao_admin_password: CHANGE_ME

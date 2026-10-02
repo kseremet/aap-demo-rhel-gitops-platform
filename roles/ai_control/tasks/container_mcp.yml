@@ -1,0 +1,90 @@
+---
+# Manage cluster resources from the Ansible controller: the AI VM does not need
+# Kubernetes client libraries or a mounted OpenShift service-account token.
+- name: Apply the containerized Linux MCP SSH and authorization configuration
+  kubernetes.core.k8s:
+    state: present
+    host: "{{ openshift_api_url }}"
+    api_key: "{{ vault_openshift_token }}"
+    validate_certs: "{{ openshift_validate_certs }}"
+    definition: "{{ lookup('ansible.builtin.template', 'linux_mcp_configmap.yml.j2') | from_yaml }}"
+  delegate_to: localhost
+  become: false
+  run_once: true
+  tags:
+    - ai_control
+    - mcp
+    - openshift
+
+- name: Store the fleet SSH private key in an OpenShift Secret
+  kubernetes.core.k8s:
+    state: present
+    host: "{{ openshift_api_url }}"
+    api_key: "{{ vault_openshift_token }}"
+    validate_certs: "{{ openshift_validate_certs }}"
+    definition: "{{ lookup('ansible.builtin.template', 'linux_mcp_secret.yml.j2') | from_yaml }}"
+  delegate_to: localhost
+  become: false
+  run_once: true
+  no_log: true
+  tags:
+    - ai_control
+    - mcp
+    - openshift
+    - secrets
+
+- name: Create the in-namespace Linux MCP ClusterIP Service
+  kubernetes.core.k8s:
+    state: present
+    host: "{{ openshift_api_url }}"
+    api_key: "{{ vault_openshift_token }}"
+    validate_certs: "{{ openshift_validate_certs }}"
+    definition: "{{ lookup('ansible.builtin.template', 'linux_mcp_service.yml.j2') | from_yaml }}"
+  delegate_to: localhost
+  become: false
+  run_once: true
+  tags:
+    - ai_control
+    - mcp
+    - openshift
+
+- name: Deploy the containerized Linux MCP server
+  kubernetes.core.k8s:
+    state: present
+    host: "{{ openshift_api_url }}"
+    api_key: "{{ vault_openshift_token }}"
+    validate_certs: "{{ openshift_validate_certs }}"
+    definition: "{{ lookup('ansible.builtin.template', 'linux_mcp_deployment.yml.j2') | from_yaml }}"
+  delegate_to: localhost
+  become: false
+  run_once: true
+  tags:
+    - ai_control
+    - mcp
+    - openshift
+
+# Wait for the in-namespace endpoint before writing the CrewAI client settings;
+# this also gives a clear failure if the image, Secret, or projected config is invalid.
+- name: Wait for the Linux MCP deployment to become available
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: "{{ ai_control_mcp_deployment_name }}"
+    namespace: "{{ openshift_vm_namespace }}"
+    host: "{{ openshift_api_url }}"
+    api_key: "{{ vault_openshift_token }}"
+    validate_certs: "{{ openshift_validate_certs }}"
+  delegate_to: localhost
+  become: false
+  run_once: true
+  register: _ai_control_linux_mcp_status
+  until: >-
+    _ai_control_linux_mcp_status.resources | length == 1 and
+    (_ai_control_linux_mcp_status.resources[0].status.updatedReplicas | default(0) | int) >= 1 and
+    (_ai_control_linux_mcp_status.resources[0].status.availableReplicas | default(0) | int) >= 1
+  retries: 30
+  delay: 10
+  tags:
+    - ai_control
+    - mcp
+    - openshift

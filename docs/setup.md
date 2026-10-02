@@ -13,7 +13,7 @@ The bootstrap performs these operations in order:
 1. Generates the ignored runtime SSH key.
 2. Provisions the four RHEL fleet VMs and the `ai-01-gitops` control VM.
 3. Discovers all VM management addresses.
-4. Configures `ai-01` with the AI Python environment and Linux MCP runtime.
+4. Configures `ai-01` with the AI Python environment and both Linux MCP runtimes.
 5. Applies AAP Configuration as Code.
 
 The AI control VM is excluded from the AAP `RHEL Fleet` inventory. It is
@@ -22,8 +22,9 @@ not targeted by the state repository's `site.yml` reconciliation.
 
 ## AI control VM configuration
 
-`playbooks/setup/04_configure_ai_vm.yml` configures the fifth VM. It installs
-Python 3.12, creates `/home/cloud-user/.venv`, and installs:
+`playbooks/setup/04_configure_ai_vm.yml` configures the fifth VM and the
+containerized MCP resources in the same OpenShift namespace. It installs Python
+3.12, creates `/home/cloud-user/.venv`, and installs:
 
 - `linux-mcp-server==1.4.1`
 - `fastmcp==2.14.5`
@@ -31,12 +32,28 @@ Python 3.12, creates `/home/cloud-user/.venv`, and installs:
 - CrewAI with OpenAI-compatible provider support
 - FastAPI, Uvicorn, HTTPX, OpenAI, Requests, and dotenv support
 
-The MCP server is installed on the control VM only. It uses the generated
-runtime SSH key to connect to the RHEL targets as `cloud-user`. The generated
-`~/.ssh/config` provides aliases matching the stable inventory names.
+The generated private SSH key is imported into the AAP Machine Credential and
+copied into an OpenShift Secret for the containerized MCP server. The source key
+stays under ignored `runtime/` and must not be committed.
 
-The server is prepared for stdio use: the future CrewAI client will start the
-local MCP process and pass a target alias such as `web-02` in each tool call.
+The local MCP server remains installed on the control VM and is available over
+stdio. The playbook also deploys `linux-mcp-server` as a one-replica OpenShift
+Deployment with an in-namespace ClusterIP Service. Its SSH configuration is
+generated from discovered fleet addresses; the private key is stored in an
+OpenShift Secret. The container uses `emptyDir` for its log files, while its
+console logs are available through the normal container log stream.
+
+By default CrewAI uses the containerized server at
+`http://linux-mcp-server:8000/mcp`. To switch to the local stdio server, set
+`demo_ai_mcp_mode: local` in `group_vars/all/demo_variables.yml` and rerun the AI
+configuration playbook. Set it back to `container` to use the OpenShift Service
+again. Both backends use the same SSH aliases and diagnostic tool interface.
+
+The containerized demo policy allows all tools for all hosts to any client that
+can reach the Service, using the `cloud-user` SSH identity. SSH host-key
+verification is disabled for this demo. Restrict network access and replace
+these settings with authenticated, least-privilege policy before using this
+pattern beyond a disposable lab.
 
 ## Model configuration
 
@@ -85,12 +102,12 @@ configuration playbook so the agent can create a branch and pull request. SSH
 to `ai-01` and run:
 
 ```bash
-set -a
-source /home/cloud-user/agentic-aiops/.env
-set +a
 /home/cloud-user/agentic-aiops/incident_agent.py \
   "Investigate web-01 because net.core.somaxconn appears inconsistent with the web-server policy. Determine the root cause and propose a GitOps remediation pull request. Do not modify the host directly."
 ```
+
+The agent loads `/home/cloud-user/agentic-aiops/.env` automatically. You may
+still source that file manually when inspecting or overriding runtime values.
 
 The agent uses read-only Linux MCP tools for investigation. It does not modify
 managed hosts directly. Its repository write operation creates a GitHub branch
@@ -145,6 +162,47 @@ to test the flow.
 When the rulebook changes, sync the `RHEL GitOps EDA` project in the EDA UI
 before applying CasC again. CasC does not force a project sync on every run, so
 it will not race with an in-progress manual sync.
+
+## Automation Orchestrator backend
+
+The default event-processing backend is Automation Orchestrator. Before
+applying CasC, configure these values in `group_vars/all/demo_variables.yml`:
+
+```yaml
+demo_ai_backend: automation_orchestrator
+demo_ao_url: https://automation-orchestrator.example.com
+demo_ao_incident_eda_trigger_path: your-incident-trigger-path
+demo_ao_pr_review_eda_trigger_path: your-pr-review-trigger-path
+```
+
+Store the local admin password in encrypted `vault.yml`:
+
+```yaml
+vault_ao_admin_password: CHANGE_ME
+```
+
+Run the AO-specific CasC playbook:
+
+```bash
+ansible-playbook playbooks/ao_config.yml --vault-id @prompt
+```
+
+It creates or reuses the `RHEL GitOps Agentic Workflows` project and imports or
+updates both workflow definitions. The EDA rulebook forwards GitHub issue and
+pull-request events to the corresponding unauthenticated AO EDA trigger through
+`JT - AO Event Bridge`. The existing CrewAI jobs remain available; set
+`demo_ai_backend: crewai` to route events back to the AI VM implementation.
+
+Import these workflow definitions into Automation Orchestrator:
+
+- `workflows/automation-orchestrator/rhel-gitops-incident.yaml`
+- `workflows/automation-orchestrator/rhel-gitops-pr-review.yaml`
+
+Configure the EDA trigger paths in the workflow definitions to match the two
+variables above. Configure the existing AAP and LLM integrations, select the
+new MCP integration pointing to the in-namespace `linux-mcp-server` Service,
+and map the task-agent profiles/models to the available AO resources. This
+phase intentionally does not automate AO installation or integration creation.
 
 The CasC playbook checks for the existing `GitHub AI Incident Issues`
 activation and disables it before applying updates. This handles EDA's

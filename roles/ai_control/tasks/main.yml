@@ -1,4 +1,15 @@
 ---
+- name: Validate the selected CrewAI MCP backend
+  ansible.builtin.assert:
+    that:
+      - ai_control_mcp_mode in ['container', 'local']
+    fail_msg: >-
+      Set demo_ai_mcp_mode to either `container` or `local` in
+      group_vars/all/demo_variables.yml.
+  tags:
+    - ai_control
+    - mcp
+
 - name: Register the AI control VM with Red Hat
   ansible.builtin.include_role:
     name: redhat.rhel_system_roles.rhc
@@ -20,6 +31,13 @@
   tags:
     - ai_control
     - ssh
+
+- name: Deploy the containerized Linux MCP service in OpenShift
+  ansible.builtin.include_tasks: container_mcp.yml
+  tags:
+    - ai_control
+    - mcp
+    - openshift
 
 - name: Install the CrewAI and Linux MCP Python environment
   ansible.builtin.include_tasks: python.yml

@@ -1,0 +1,110 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ ai_control_mcp_deployment_name }}
+  namespace: {{ openshift_vm_namespace }}
+  labels:
+    app: {{ ai_control_mcp_deployment_name }}
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: {{ ai_control_mcp_deployment_name }}
+  template:
+    metadata:
+      labels:
+        app: {{ ai_control_mcp_deployment_name }}
+      # Policy is cached by the server at startup; configuration/key digests
+      # make changes create a fresh pod without changing unrelated Deployment fields.
+      annotations:
+        checksum/config: {{ lookup('ansible.builtin.template', 'linux_mcp_configmap.yml.j2') | hash('sha256') }}
+        checksum/ssh-key: {{ lookup('ansible.builtin.file', demo_ssh_private_key_path) | hash('sha256') }}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: linux-mcp-server
+          image: {{ ai_control_mcp_container_image }}
+          imagePullPolicy: Always
+          ports:
+            - name: mcp-server-http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            - name: LINUX_MCP_TRANSPORT
+              value: http
+            - name: LINUX_MCP_HOST
+              value: 0.0.0.0
+            - name: LINUX_MCP_PORT
+              value: "8000"
+            - name: LINUX_MCP_USER
+              value: {{ ai_control_mcp_container_user }}
+            - name: LINUX_MCP_SSH_KEY_PATH
+              value: {{ ai_control_mcp_key_path }}
+            - name: LINUX_MCP_VERIFY_HOST_KEYS
+              value: "false"
+            - name: LINUX_MCP_POLICY_PATH
+              value: {{ ai_control_mcp_policy_path }}
+            - name: LINUX_MCP_LOG_DIR
+              value: {{ ai_control_mcp_log_dir }}
+          resources:
+{{ ai_control_mcp_resources | to_nice_yaml(indent=2) | indent(12, true) }}
+          # The MCP path is a protocol endpoint, not a health endpoint; TCP probes
+          # check listener availability without sending invalid MCP requests.
+          startupProbe:
+            tcpSocket:
+              port: mcp-server-http
+            periodSeconds: 5
+            failureThreshold: 24
+          readinessProbe:
+            tcpSocket:
+              port: mcp-server-http
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: mcp-server-http
+            periodSeconds: 10
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: ssh-material
+              mountPath: {{ ai_control_mcp_config_dir }}
+              readOnly: true
+            - name: logs
+              mountPath: {{ ai_control_mcp_log_dir }}
+      volumes:
+        - name: ssh-material
+          projected:
+            defaultMode: 420
+            sources:
+              - configMap:
+                  name: {{ ai_control_mcp_configmap_name }}
+                  items:
+                    - key: config
+                      path: config
+                    - key: policy.yaml
+                      path: policy.yaml
+              - secret:
+                  name: {{ ai_control_mcp_secret_name }}
+                  items:
+                    - key: id_ed25519
+                      path: id_ed25519
+                      mode: 420
+        - name: logs
+          # File logs are ephemeral; normal application logs are also captured from stderr.
+          emptyDir:
+            sizeLimit: 1Gi

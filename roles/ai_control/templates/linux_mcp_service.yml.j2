@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ ai_control_mcp_service_name }}
+  namespace: {{ openshift_vm_namespace }}
+  labels:
+    app: {{ ai_control_mcp_deployment_name }}
+spec:
+  type: ClusterIP
+  selector:
+    app: {{ ai_control_mcp_deployment_name }}
+  ports:
+    - name: mcp-server-http
+      protocol: TCP
+      port: 8000
+      targetPort: mcp-server-http

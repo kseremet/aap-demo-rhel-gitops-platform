@@ -4,9 +4,6 @@
   hosts: localhost
   connection: local
   gather_facts: false
-  collections:
-    - infra.aap_configuration
-    - ansible.builtin
   vars_files:
     - ../../vault.yml
     - ../../group_vars/all/demo_variables.yml
@@ -46,6 +43,13 @@
         organization: "{{ demo_organization_name }}"
         credential_type: Machine
         state: absent
+      - name: GitHub API Access
+        organization: "{{ demo_organization_name }}"
+        credential_type: GitHub API Token
+        state: absent
+    controller_credential_types:
+      - name: GitHub API Token
+        state: absent
     controller_inventories:
       - name: "{{ demo_inventory_name }}"
         organization: "{{ demo_organization_name }}"
@@ -79,6 +83,12 @@
       - name: JT - AI PR Review
         organization: "{{ demo_organization_name }}"
         state: absent
+      - name: JT - AO Event Bridge
+        organization: "{{ demo_organization_name }}"
+        state: absent
+      - name: JT - AO GitOps Action
+        organization: "{{ demo_organization_name }}"
+        state: absent
     eda_rulebook_activations:
       - name: GitHub AI Incident Issues
         organization: "{{ demo_organization_name }}"
@@ -103,9 +113,6 @@
   hosts: localhost
   connection: local
   gather_facts: false
-  collections:
-    - infra.aap_configuration
-    - ansible.builtin
   vars_files:
     - ../../vault.yml
     - ../../group_vars/all/demo_variables.yml

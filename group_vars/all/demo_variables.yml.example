@@ -37,6 +37,22 @@ demo_ai_llm_base_url: https://api.openai.com/v1
 demo_ai_repo_path: /home/cloud-user/agentic-aiops/state-repo
 demo_ai_github_api_url: https://api.github.com
 demo_ai_pr_branch_prefix: aiops/
+# Select the event-processing backend. `automation_orchestrator` forwards EDA
+# events to Automation Orchestrator; `crewai` keeps the VM-local fallback.
+demo_ai_backend: automation_orchestrator
+demo_ao_url: CHANGE_ME_AUTOMATION_ORCHESTRATOR_URL
+demo_ao_username: admin
+demo_ao_validate_certs: false
+demo_ao_incident_eda_trigger_path: rhel-gitops-incident
+demo_ao_pr_review_eda_trigger_path: rhel-gitops-pr-review
+demo_ao_project_name: RHEL GitOps Agentic Workflows
+# `container` uses the in-namespace OpenShift Service; set `local` to use the
+# Linux MCP server installed on the AI VM over stdio instead.
+demo_ai_mcp_mode: container
+# In-namespace Streamable HTTP endpoint used by the container backend.
+demo_ai_mcp_url: http://linux-mcp-server:8000/mcp
+# Container image for the one-replica OpenShift MCP service.
+demo_ai_mcp_container_image: quay.io/redhat-services-prod/rhel-lightspeed-tenant/linux-mcp-server:latest
 demo_eda_project_name: RHEL GitOps EDA
 demo_eda_controller_credential_name: EDA Controller Access
 demo_eda_decision_environment_name: default-de

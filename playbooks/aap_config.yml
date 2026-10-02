@@ -4,10 +4,6 @@
   hosts: localhost
   connection: local
   gather_facts: false
-  collections:
-    - infra.aap_configuration
-    - ansible.eda
-    - ansible.builtin
   vars_files:
     - ../vault.yml
     - ../group_vars/all/demo_variables.yml
@@ -32,10 +28,17 @@
             (vault_demo_ssh_private_key is defined
              and vault_demo_ssh_private_key not in ['', 'CHANGE_ME'])
             or (demo_ssh_private_key_path is file)
+          - demo_ai_backend in ['automation_orchestrator', 'crewai']
+          - >-
+            demo_ai_backend != 'automation_orchestrator'
+            or (
+              demo_ao_url is defined
+              and demo_ao_url not in ['', 'CHANGE_ME_AUTOMATION_ORCHESTRATOR_URL']
+            )
         fail_msg: >-
-          Run VM discovery first and configure AAP, SCM, and SSH key values
-          before applying CasC. Provide a real vault_demo_ssh_private_key or
-          keep the generated key at {{ demo_ssh_private_key_path }}.
+          Run VM discovery first and configure AAP, SCM, SSH key, and selected
+          AI backend values before applying CasC. For the AO backend, provide
+          the Automation Orchestrator URL.
 
     - name: Set AAP authentication variables
       ansible.builtin.set_fact:
