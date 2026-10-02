@@ -126,7 +126,6 @@
     validate_certs: "{{ demo_ao_validate_certs }}"
   register: _ao_created_integration
   when: _ao_existing_integration.id is not defined
-  no_log: true
 
 - name: Update the existing AO integration
   ansible.builtin.uri:

@@ -202,6 +202,17 @@ an internal OpenShift address. The demo MCP policy ignores the bearer value, but
 the project-scoped credential makes the MCP execution binding explicit in the AO
 agentic steps.
 
+For the default internal MCP URL, configure the AO deployment with an allowlist
+such as:
+
+```text
+APP_INTEGRATION_URL_ALLOWED_HOSTS=["linux-mcp-server"]
+```
+
+Use the exact hostname from `demo_ao_mcp_url`; for a cross-namespace Service DNS
+name, allowlist that full hostname instead. Restart AO after changing the
+setting, then rerun `playbooks/ao_config.yml`.
+
 Import these workflow definitions into Automation Orchestrator:
 
 - `workflows/automation-orchestrator/rhel-gitops-incident.yaml`
