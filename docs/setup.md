@@ -187,7 +187,7 @@ Run the AO-specific CasC playbook:
 ansible-playbook playbooks/ao_config.yml --vault-id @prompt
 ```
 
-It creates or reuses the `RHEL GitOps Agentic Workflows` project and imports or
+It creates or reuses the `rhel-gitops-agentic-workflows` project and imports or
 updates both workflow definitions. The EDA rulebook forwards GitHub issue and
 pull-request events to the corresponding unauthenticated AO EDA trigger through
 `JT - AO Event Bridge`. The existing CrewAI jobs remain available; set
