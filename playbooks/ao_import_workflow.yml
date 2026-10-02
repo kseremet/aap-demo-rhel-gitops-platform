@@ -31,6 +31,30 @@
     return_content: true
     validate_certs: "{{ demo_ao_validate_certs }}"
   register: _ao_workflows
+  changed_when: false
+  no_log: true
+
+- name: Resolve the existing AO workflow record
+  ansible.builtin.set_fact:
+    _ao_existing_workflow: >-
+      {{ _ao_workflows.json.resources | default([])
+         | selectattr('name', 'equalto', ao_workflow.name) | list | first
+         | default({}) }}
+  changed_when: false
+  no_log: true
+
+- name: Read the current AO workflow definition
+  ansible.builtin.uri:
+    url: "{{ ao_api_base_url }}/workflows/{{ _ao_existing_workflow.id }}?include=workflow_definition"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ ao_access_token }}"
+    status_code: 200
+    return_content: true
+    validate_certs: "{{ demo_ao_validate_certs }}"
+  register: _ao_existing_workflow_detail
+  changed_when: false
+  when: _ao_existing_workflow.id is defined
   no_log: true
 
 - name: Create the AO workflow when absent
@@ -49,6 +73,7 @@
     status_code: 201
     return_content: true
     validate_certs: "{{ demo_ao_validate_certs }}"
+  changed_when: true
   when: >-
     (_ao_workflows.json.resources | default([])
      | selectattr('name', 'equalto', ao_workflow.name) | list | length) == 0
@@ -56,10 +81,7 @@
 
 - name: Update the existing AO workflow definition
   ansible.builtin.uri:
-    url: >-
-      {{ ao_api_base_url }}/workflows/{{
-        (_ao_workflows.json.resources
-         | selectattr('name', 'equalto', ao_workflow.name) | list | first).id }}
+    url: "{{ ao_api_base_url }}/workflows/{{ _ao_existing_workflow.id }}"
     method: PATCH
     headers:
       Authorization: "Bearer {{ ao_access_token }}"
@@ -73,7 +95,9 @@
     status_code: 200
     return_content: true
     validate_certs: "{{ demo_ao_validate_certs }}"
+  changed_when: true
   when: >-
-    (_ao_workflows.json.resources | default([])
-     | selectattr('name', 'equalto', ao_workflow.name) | list | length) > 0
+    _ao_existing_workflow.id is defined and
+    (_ao_existing_workflow_detail.json.version.workflow_definition | default({}))
+    != _ao_workflow_definition
   no_log: true
