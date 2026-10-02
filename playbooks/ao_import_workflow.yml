@@ -99,8 +99,6 @@
       Authorization: "Bearer {{ ao_access_token }}"
     body_format: json
     body:
-      description: "{{ _ao_workflow_definition.description | default('') }}"
-      project_id: "{{ ao_project_id }}"
       workflow_definition: "{{ _ao_workflow_definition }}"
       expected_version: "{{ _ao_existing_workflow_detail.json.current_version }}"
       change_description: Managed by playbooks/ao_config.yml.
