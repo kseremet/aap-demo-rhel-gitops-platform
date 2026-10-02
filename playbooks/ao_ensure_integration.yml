@@ -1,9 +1,9 @@
 ---
 - name: List AO credential types
   ansible.builtin.uri:
-    # The AO router has a dynamic /credentials/{credential_id} route before
-    # /credentials/credential_types; the trailing slash selects the static route.
-    url: "{{ ao_api_base_url }}/credentials/credential_types/?limit=100"
+    # Credential-type metadata is mounted at the API root; credential CRUD is
+    # mounted below /credentials.
+    url: "{{ ao_api_base_url }}/credential_types?limit=100"
     method: GET
     headers:
       Authorization: "Bearer {{ ao_access_token }}"
