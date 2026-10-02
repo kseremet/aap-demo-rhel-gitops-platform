@@ -28,7 +28,9 @@
           | replace('__AO_LLM_MODEL_ID__', ao_llm_model_id)
           | replace('__AO_LLM_CREDENTIAL_ID__', ao_llm_credential_id)
           | replace('__AO_AAP_INTEGRATION_ID__', ao_aap_integration_id)
-          | replace('__AO_AAP_CREDENTIAL_ID__', ao_aap_credential_id)) | from_json }}
+          | replace('__AO_AAP_CREDENTIAL_ID__', ao_aap_credential_id)
+          | replace('__AO_MCP_INTEGRATION_ID__', ao_mcp_integration_id)
+          | replace('__AO_MCP_CREDENTIAL_ID__', ao_mcp_credential_id)) | from_json }}
   no_log: true
 
 - name: Look up an existing AO workflow with the same name

@@ -22,3 +22,8 @@ vault_ai_llm_api_key: CHANGE_ME
 
 # Automation Orchestrator local admin password used by AO CasC.
 vault_ao_admin_password: CHANGE_ME
+
+# Demo bearer value for the unauthenticated MCP policy. The MCP server ignores
+# this header in demo mode; keep it in Vault so the AO execution credential is
+# still managed as a secret.
+vault_ao_mcp_bearer_token: demo-mcp-token

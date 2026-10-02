@@ -167,6 +167,7 @@
           - ao_llm_credential_id is defined
           - ao_llm_model_id is defined
           - ao_mcp_integration_id is defined
+          - ao_mcp_credential_id is defined
         fail_msg: >-
           AO integrations or the configured LLM model could not be discovered.
           Check the AAP/LLM/MCP endpoints and AO's internal MCP hostname allowlist.

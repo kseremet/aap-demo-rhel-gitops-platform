@@ -225,5 +225,6 @@
 - name: Store the project MCP integration ID
   ansible.builtin.set_fact:
     ao_mcp_integration_id: "{{ ao_integration_id }}"
+    ao_mcp_credential_id: "{{ ao_integration_credential_id }}"
   when: ao_integration.integration_type == 'mcp_server'
   changed_when: false

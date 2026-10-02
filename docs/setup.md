@@ -179,6 +179,7 @@ Store the local admin password in encrypted `vault.yml`:
 
 ```yaml
 vault_ao_admin_password: CHANGE_ME
+vault_ao_mcp_bearer_token: demo-mcp-token
 ```
 
 Run the AO-specific CasC playbook:
@@ -197,7 +198,9 @@ The AO playbook also creates project-scoped AAP, LLM, and Linux MCP integrations
 their management credentials, assigns them to the AO project, validates them,
 and refreshes discovered models/tools before importing workflows. AO must allow
 the MCP hostname through its integration URL allowlist when the MCP Service is
-an internal OpenShift address.
+an internal OpenShift address. The demo MCP policy ignores the bearer value, but
+the project-scoped credential makes the MCP execution binding explicit in the AO
+agentic steps.
 
 Import these workflow definitions into Automation Orchestrator:
 
