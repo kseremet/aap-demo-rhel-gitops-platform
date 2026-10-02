@@ -102,7 +102,7 @@
       description: "{{ _ao_workflow_definition.description | default('') }}"
       project_id: "{{ ao_project_id }}"
       workflow_definition: "{{ _ao_workflow_definition }}"
-      is_import: true
+      expected_version: "{{ _ao_existing_workflow_detail.json.current_version }}"
       change_description: Managed by playbooks/ao_config.yml.
     status_code: 200
     return_content: true
@@ -112,4 +112,6 @@
     _ao_existing_workflow.id is defined and
     (_ao_existing_workflow_detail.json.version.workflow_definition | default({}))
     != _ao_workflow_definition
-  no_log: true
+  # The request contains only workflow metadata and UUID references; expose AO
+  # validation failures instead of masking a non-secret API response.
+  no_log: false
