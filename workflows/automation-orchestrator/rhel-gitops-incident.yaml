@@ -16,7 +16,9 @@ nodes:
     name: Investigate the reported host
     parameters:
       agent: production://rhel-incident-investigator
-      model: gpt-5.6-luna
+      llm_model_id: __AO_LLM_MODEL_ID__
+      credential_id: __AO_LLM_CREDENTIAL_ID__
+      tool_selection_strategy: ALL
       prompt: >-
         Investigate the GitHub incident payload below. Use only the selected
         read-only Linux MCP tools. Identify the target host, collect direct
@@ -33,7 +35,9 @@ nodes:
     name: Analyze GitOps state and root cause
     parameters:
       agent: production://rhel-gitops-analyst
-      model: gpt-5.6-luna
+      llm_model_id: __AO_LLM_MODEL_ID__
+      credential_id: __AO_LLM_CREDENTIAL_ID__
+      tool_selection_strategy: ALL
       prompt: >-
         Analyze the investigation below against the GitOps repository context
         available to you. Explain variable precedence and determine the minimum
@@ -51,7 +55,9 @@ nodes:
     name: Prepare the GitOps pull-request plan
     parameters:
       agent: production://rhel-gitops-remediation-planner
-      model: gpt-5.6-luna
+      llm_model_id: __AO_LLM_MODEL_ID__
+      credential_id: __AO_LLM_CREDENTIAL_ID__
+      tool_selection_strategy: NONE
       prompt: >-
         Create one minimal, reviewable GitHub pull-request plan from the
         investigation and root-cause analysis. Return only JSON with this shape:
@@ -78,6 +84,8 @@ nodes:
     name: Create the GitOps pull request through AAP
     parameters:
       job_template_name: JT - AO GitOps Action
+      integration_id: __AO_AAP_INTEGRATION_ID__
+      credential_id: __AO_AAP_CREDENTIAL_ID__
       organization_name: RHEL GitOps
       extra_vars:
         ao_plan: ${prepare_gitops_plan.ao_plan}

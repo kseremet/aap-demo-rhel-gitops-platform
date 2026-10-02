@@ -21,6 +21,16 @@
          | combine({'triggers': [_ao_trigger]}, recursive=True) }}
   no_log: true
 
+- name: Inject discovered project integration and model IDs
+  ansible.builtin.set_fact:
+    _ao_workflow_definition: >-
+      {{ (_ao_workflow_definition | to_json
+          | replace('__AO_LLM_MODEL_ID__', ao_llm_model_id)
+          | replace('__AO_LLM_CREDENTIAL_ID__', ao_llm_credential_id)
+          | replace('__AO_AAP_INTEGRATION_ID__', ao_aap_integration_id)
+          | replace('__AO_AAP_CREDENTIAL_ID__', ao_aap_credential_id)) | from_json }}
+  no_log: true
+
 - name: Look up an existing AO workflow with the same name
   ansible.builtin.uri:
     url: "{{ ao_api_base_url }}/workflows?limit=100"

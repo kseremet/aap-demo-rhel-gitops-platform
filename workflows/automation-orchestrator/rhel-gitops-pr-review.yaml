@@ -16,7 +16,9 @@ nodes:
     name: Understand maintainer feedback
     parameters:
       agent: production://rhel-pr-review-investigator
-      model: gpt-5.6-luna
+      llm_model_id: __AO_LLM_MODEL_ID__
+      credential_id: __AO_LLM_CREDENTIAL_ID__
+      tool_selection_strategy: ALL
       prompt: >-
         Analyze this GitHub pull-request event and determine what the maintainer
         is asking for. Use read-only Linux MCP tools only when new host evidence
@@ -33,7 +35,9 @@ nodes:
     name: Plan the minimal repository revision
     parameters:
       agent: production://rhel-pr-revision-planner
-      model: gpt-5.6-luna
+      llm_model_id: __AO_LLM_MODEL_ID__
+      credential_id: __AO_LLM_CREDENTIAL_ID__
+      tool_selection_strategy: NONE
       prompt: >-
         Based on the feedback below, produce only JSON in this shape:
         {"operation":"update_pr","owner":"...","repository":"...",
@@ -53,6 +57,8 @@ nodes:
     name: Apply the pull-request revision through AAP
     parameters:
       job_template_name: JT - AO GitOps Action
+      integration_id: __AO_AAP_INTEGRATION_ID__
+      credential_id: __AO_AAP_CREDENTIAL_ID__
       organization_name: RHEL GitOps
       extra_vars:
         ao_plan: ${plan_revision.ao_plan}

@@ -1,0 +1,229 @@
+---
+- name: List AO credential types
+  ansible.builtin.uri:
+    url: "{{ ao_api_base_url }}/credentials/credential_types?limit=100"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ ao_access_token }}"
+    status_code: 200
+    return_content: true
+    validate_certs: "{{ demo_ao_validate_certs }}"
+  register: _ao_credential_types
+  changed_when: false
+  no_log: true
+
+- name: Resolve the integration credential type
+  ansible.builtin.set_fact:
+    _ao_credential_type: >-
+      {{ _ao_credential_types.json.resources
+         | selectattr('name', 'equalto', ao_integration.credential_type_name)
+         | list | first | default({}) }}
+  changed_when: false
+  no_log: true
+
+- name: Require a seeded credential type when credentials are needed
+  ansible.builtin.assert:
+    that:
+      - ao_integration.credential_type_name | length == 0 or _ao_credential_type.id is defined
+    fail_msg: "AO credential type {{ ao_integration.credential_type_name }} is not available."
+  no_log: true
+
+- name: List project credentials
+  ansible.builtin.uri:
+    url: "{{ ao_api_base_url }}/credentials?limit=100"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ ao_access_token }}"
+    status_code: 200
+    return_content: true
+    validate_certs: "{{ demo_ao_validate_certs }}"
+  register: _ao_credentials
+  changed_when: false
+  no_log: true
+
+- name: Resolve the existing integration credential
+  ansible.builtin.set_fact:
+    _ao_existing_credential: >-
+      {{ _ao_credentials.json.resources | default([])
+         | selectattr('name', 'equalto', ao_integration.name)
+         | selectattr('project_id', 'equalto', ao_project_id)
+         | list | first | default({}) }}
+  changed_when: false
+  no_log: true
+
+- name: Create the integration credential when required
+  ansible.builtin.uri:
+    url: "{{ ao_api_base_url }}/credentials"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ ao_access_token }}"
+    body_format: json
+    body:
+      name: "{{ ao_integration.name }}"
+      description: "Management credential for {{ ao_integration.name }}."
+      credential_type_id: "{{ _ao_credential_type.id }}"
+      inputs: "{{ ao_integration.credential_inputs }}"
+      project_id: "{{ ao_project_id }}"
+    status_code: 201
+    return_content: true
+    validate_certs: "{{ demo_ao_validate_certs }}"
+  register: _ao_created_credential
+  when: ao_integration.credential_type_name | length > 0 and _ao_existing_credential.id is not defined
+  no_log: true
+
+- name: Resolve the integration credential ID
+  ansible.builtin.set_fact:
+    ao_integration_credential_id: >-
+      {{ _ao_created_credential.json.id
+         if (_ao_created_credential is defined and _ao_created_credential.json is defined)
+         else (_ao_existing_credential.id | default(None)) }}
+  changed_when: false
+  no_log: true
+
+- name: List AO integrations
+  ansible.builtin.uri:
+    url: "{{ ao_api_base_url }}/integrations?limit=100"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ ao_access_token }}"
+    status_code: 200
+    return_content: true
+    validate_certs: "{{ demo_ao_validate_certs }}"
+  register: _ao_integrations
+  changed_when: false
+  no_log: true
+
+- name: Resolve the existing AO integration
+  ansible.builtin.set_fact:
+    _ao_existing_integration: >-
+      {{ _ao_integrations.json.resources | default([])
+         | selectattr('name', 'equalto', ao_integration.name)
+         | list | first | default({}) }}
+  changed_when: false
+  no_log: true
+
+- name: Create the AO integration when absent
+  ansible.builtin.uri:
+    url: "{{ ao_api_base_url }}/integrations"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ ao_access_token }}"
+    body_format: json
+    body:
+      name: "{{ ao_integration.name }}"
+      description: Project integration managed by Ansible.
+      integration_type: "{{ ao_integration.integration_type }}"
+      configuration: "{{ ao_integration.configuration }}"
+      management_credential_id: "{{ ao_integration_credential_id | default(None) }}"
+      scope: project
+      labels:
+        managed_by: ansible
+        demo: rhel-gitops
+    status_code: 201
+    return_content: true
+    validate_certs: "{{ demo_ao_validate_certs }}"
+  register: _ao_created_integration
+  when: _ao_existing_integration.id is not defined
+  no_log: true
+
+- name: Update the existing AO integration
+  ansible.builtin.uri:
+    url: "{{ ao_api_base_url }}/integrations/{{ _ao_existing_integration.id }}"
+    method: PATCH
+    headers:
+      Authorization: "Bearer {{ ao_access_token }}"
+    body_format: json
+    body:
+      configuration: "{{ ao_integration.configuration }}"
+      management_credential_id: "{{ ao_integration_credential_id | default(None) }}"
+      enabled: true
+      scope: project
+    status_code: 200
+    return_content: true
+    validate_certs: "{{ demo_ao_validate_certs }}"
+  register: _ao_updated_integration
+  when: _ao_existing_integration.id is defined
+  no_log: true
+
+- name: Resolve the AO integration ID
+  ansible.builtin.set_fact:
+    ao_integration_id: >-
+      {{ _ao_created_integration.json.id
+         if (_ao_created_integration is defined and _ao_created_integration.json is defined)
+         else (_ao_existing_integration.id) }}
+  changed_when: false
+  no_log: true
+
+- name: Assign the AO integration to the demo project
+  ansible.builtin.uri:
+    url: "{{ ao_api_base_url }}/integrations/{{ ao_integration_id }}/projects/{{ ao_project_id }}"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ ao_access_token }}"
+    status_code: [201, 409]
+    return_content: true
+    validate_certs: "{{ demo_ao_validate_certs }}"
+  no_log: true
+
+- name: Validate the AO integration
+  ansible.builtin.uri:
+    url: "{{ ao_api_base_url }}/integrations/{{ ao_integration_id }}/validate"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ ao_access_token }}"
+    status_code: 200
+    return_content: true
+    validate_certs: "{{ demo_ao_validate_certs }}"
+  register: _ao_validation
+  no_log: true
+
+- name: Refresh discovered AO models or tools
+  ansible.builtin.uri:
+    url: "{{ ao_api_base_url }}/integrations/{{ ao_integration_id }}/refresh"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ ao_access_token }}"
+    status_code: 200
+    return_content: true
+    validate_certs: "{{ demo_ao_validate_certs }}"
+  when: ao_integration.refresh | bool
+  register: _ao_refresh
+  no_log: true
+
+- name: Resolve the LLM model record used by AO workflows
+  ansible.builtin.uri:
+    url: "{{ ao_api_base_url }}/integrations/{{ ao_integration_id }}/models?limit=100"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ ao_access_token }}"
+    status_code: 200
+    return_content: true
+    validate_certs: "{{ demo_ao_validate_certs }}"
+  register: _ao_models
+  when: ao_integration.integration_type == 'llm_provider'
+  changed_when: false
+  no_log: true
+
+- name: Store project integration IDs for workflow injection
+  ansible.builtin.set_fact:
+    ao_aap_integration_id: "{{ ao_integration_id }}"
+    ao_aap_credential_id: "{{ ao_integration_credential_id }}"
+  when: ao_integration.integration_type == 'ansible_automation_platform'
+  changed_when: false
+
+- name: Store project LLM integration and credential IDs
+  ansible.builtin.set_fact:
+    ao_llm_integration_id: "{{ ao_integration_id }}"
+    ao_llm_credential_id: "{{ ao_integration_credential_id }}"
+    ao_llm_model_id: >-
+      {{ (_ao_models.json.resources
+          | selectattr('name', 'equalto', demo_ai_llm_model) | list | first
+          | default(_ao_models.json.resources | selectattr('is_default', 'equalto', true) | list | first)).id }}
+  when: ao_integration.integration_type == 'llm_provider'
+  changed_when: false
+
+- name: Store the project MCP integration ID
+  ansible.builtin.set_fact:
+    ao_mcp_integration_id: "{{ ao_integration_id }}"
+  when: ao_integration.integration_type == 'mcp_server'
+  changed_when: false

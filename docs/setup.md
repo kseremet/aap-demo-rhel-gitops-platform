@@ -193,6 +193,12 @@ pull-request events to the corresponding unauthenticated AO EDA trigger through
 `JT - AO Event Bridge`. The existing CrewAI jobs remain available; set
 `demo_ai_backend: crewai` to route events back to the AI VM implementation.
 
+The AO playbook also creates project-scoped AAP, LLM, and Linux MCP integrations,
+their management credentials, assigns them to the AO project, validates them,
+and refreshes discovered models/tools before importing workflows. AO must allow
+the MCP hostname through its integration URL allowlist when the MCP Service is
+an internal OpenShift address.
+
 Import these workflow definitions into Automation Orchestrator:
 
 - `workflows/automation-orchestrator/rhel-gitops-incident.yaml`

@@ -19,6 +19,40 @@
       - name: rhel-gitops-pr-review
         path: "{{ playbook_dir }}/../workflows/automation-orchestrator/rhel-gitops-pr-review.yaml"
         webhook_path: "{{ demo_ao_pr_review_eda_trigger_path }}"
+    ao_integrations:
+      - name: "{{ demo_ao_aap_integration_name }}"
+        integration_type: ansible_automation_platform
+        credential_type_name: Ansible Automation Platform
+        credential_inputs:
+          oauth_token: "{{ vault_aap_token }}"
+        configuration:
+          integration_type: ansible_automation_platform
+          base_url: >-
+            {{ aap_hostname | regex_replace('^(?!https?://)', 'https://')
+               | regex_replace('/+$', '') }}
+          insecure_skip_tls_verify: "{{ not (aap_validate_certs | bool) }}"
+        refresh: false
+      - name: "{{ demo_ao_llm_integration_name }}"
+        integration_type: llm_provider
+        credential_type_name: LLM Provider
+        credential_inputs:
+          api_key: "{{ vault_ai_llm_api_key }}"
+        configuration:
+          integration_type: llm_provider
+          provider_hint: "{{ demo_ai_llm_provider }}"
+          base_url: "{{ demo_ai_llm_base_url }}"
+          insecure_skip_tls_verify: false
+        refresh: true
+      - name: "{{ demo_ao_mcp_integration_name }}"
+        integration_type: mcp_server
+        credential_type_name: ""
+        credential_inputs: {}
+        configuration:
+          integration_type: mcp_server
+          base_url: "{{ demo_ao_mcp_url }}"
+          allow_http: true
+          insecure_skip_tls_verify: true
+        refresh: true
   tasks:
     - name: Validate Automation Orchestrator configuration inputs
       ansible.builtin.assert:
@@ -113,6 +147,33 @@
       tags:
         - ao
         - project
+
+    - name: Create or reconcile AO project integrations and credentials
+      ansible.builtin.include_tasks: ao_ensure_integration.yml
+      loop: "{{ ao_integrations }}"
+      loop_control:
+        loop_var: ao_integration
+        label: "{{ ao_integration.name }}"
+      tags:
+        - ao
+        - integrations
+
+    - name: Validate discovered AO integration resources
+      ansible.builtin.assert:
+        that:
+          - ao_aap_integration_id is defined
+          - ao_aap_credential_id is defined
+          - ao_llm_integration_id is defined
+          - ao_llm_credential_id is defined
+          - ao_llm_model_id is defined
+          - ao_mcp_integration_id is defined
+        fail_msg: >-
+          AO integrations or the configured LLM model could not be discovered.
+          Check the AAP/LLM/MCP endpoints and AO's internal MCP hostname allowlist.
+      no_log: true
+      tags:
+        - ao
+        - integrations
 
     - name: Import or update the version-controlled AO workflows
       ansible.builtin.include_tasks: ao_import_workflow.yml
