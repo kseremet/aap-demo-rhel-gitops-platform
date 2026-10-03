@@ -19,8 +19,6 @@ nodes:
       llm_model_id: __AO_LLM_MODEL_ID__
       credential_id: __AO_LLM_CREDENTIAL_ID__
       tool_selection_strategy: ALL
-      integration_connections:
-          - integration_id: __AO_MCP_INTEGRATION_ID__
       prompt: >-
         Investigate the GitHub incident payload below. Use only the selected
         read-only Linux MCP tools. Identify the target host, collect direct
@@ -40,8 +38,6 @@ nodes:
       llm_model_id: __AO_LLM_MODEL_ID__
       credential_id: __AO_LLM_CREDENTIAL_ID__
       tool_selection_strategy: ALL
-      integration_connections:
-          - integration_id: __AO_MCP_INTEGRATION_ID__
       prompt: >-
         Analyze the investigation below against the GitOps repository context
         available to you. Explain variable precedence and determine the minimum
