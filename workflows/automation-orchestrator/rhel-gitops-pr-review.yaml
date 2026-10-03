@@ -21,7 +21,6 @@ nodes:
       tool_selection_strategy: ALL
       integration_connections:
         - integration_id: __AO_MCP_INTEGRATION_ID__
-          credential_id: __AO_MCP_CREDENTIAL_ID__
       prompt: >-
         Analyze this GitHub pull-request event and determine what the maintainer
         is asking for. Use read-only Linux MCP tools only when new host evidence
