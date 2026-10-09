@@ -28,12 +28,9 @@
     - name: Normalize the structured GitOps plan
       ansible.builtin.set_fact:
         _ao_plan_text: >-
-           {{ (ao_plan if ao_plan is string else (ao_plan | to_json))
-             | trim
-             | regex_replace('^```json[[:space:]]*', '')
-             | regex_replace('^```[[:space:]]*', '')
-             | regex_replace('```[[:space:]]*$', '')
-             | trim }}
+          {{ (ao_plan.split('```')[1]
+              | regex_replace('^json[[:space:]]*', '') | trim)
+             if '```' in ao_plan else (ao_plan | trim) }}
       no_log: false
       tags:
         - ao
