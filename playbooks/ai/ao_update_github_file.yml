@@ -4,7 +4,7 @@
     that:
       - _ao_file.path is string
       - not _ao_file.path.startswith('/')
-      - '..' not in _ao_file.path.split('/')
+      - "'..' not in _ao_file.path.split('/')"
     fail_msg: >-
       GitOps plan paths must be repository-relative and cannot contain '..':
       {{ _ao_file.path | default('missing path') }}
