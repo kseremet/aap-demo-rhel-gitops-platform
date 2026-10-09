@@ -1,4 +1,15 @@
 ---
+- name: Validate the planned GitOps repository path
+  ansible.builtin.assert:
+    that:
+      - _ao_file.path is string
+      - not _ao_file.path.startswith('/')
+      - '..' not in _ao_file.path.split('/')
+    fail_msg: >-
+      GitOps plan paths must be repository-relative and cannot contain '..':
+      {{ _ao_file.path | default('missing path') }}
+  no_log: false
+
 - name: Read the current GitOps file from the working branch
   ansible.builtin.uri:
     url: >-

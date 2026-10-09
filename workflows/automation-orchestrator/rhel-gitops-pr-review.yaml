@@ -51,7 +51,9 @@ nodes:
             items:
               type: object
               properties:
-                path: {type: string}
+                path:
+                  type: string
+                  pattern: "^(?!/)(?!.*\\.\\.).+$"
                 content: {type: string}
               required: [path, content]
           comment: {type: string}
@@ -64,6 +66,8 @@ nodes:
         "content":"..."}],"comment":"..."}. Preserve unrelated files and
         do not claim that validation or approval occurred unless the event proves
         it.
+        Every files.path value must be repository-relative with no leading slash.
+        Never use host filesystem paths.
 
         Feedback analysis:
         ${understand_feedback.result.content}

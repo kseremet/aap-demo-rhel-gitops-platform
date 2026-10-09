@@ -71,10 +71,12 @@ nodes:
             items:
               type: object
               properties:
-                path: {type: string}
+                path:
+                  type: string
+                  pattern: "^(?!/)(?!.*\\.\\.).+$"
                 content: {type: string}
               required: [path, content]
-          validation_plan: {type: string}
+         validation_plan: {type: string}
         required: [operation, owner, repository, base_branch, branch, pr_title, pr_body, commit_message, files, validation_plan]
       prompt: >-
         Create one minimal, reviewable GitHub pull-request plan from the
@@ -84,7 +86,13 @@ nodes:
         "pr_title":"...","pr_body":"...","commit_message":"...",
         "files":[{"path":"...","content":"..."}],
         "validation_plan":"..."}. Preserve unrelated repository content and
-        never include host-side commands.
+         never include host-side commands.
+         Every files[].path value must be relative to the Git repository. Never
+         use an absolute host path such as /etc/sysctl.conf. Prefer the
+         repository's existing sysctl or role variables file, and identify that
+         path from the repository context.
+        Every files.path value must be repository-relative with no leading slash.
+        Never use host paths such as /etc/ssh/sshd_config.
 
         Original event:
         ${trigger}
