@@ -248,10 +248,18 @@
         - service_account
 
     - name: Rotate the existing AO EDA client credential
+      ansible.builtin.set_fact:
+        _ao_eda_credential_id: "{{ (_ao_service_account_credentials.json.resources | first).id }}"
+      when: (_ao_service_account_credentials.json.resources | default([]) | length) > 0
+      changed_when: false
+      no_log: true
+      tags:
+        - ao
+        - service_account
+
+    - name: Rotate the existing AO EDA client credential secret
       ansible.builtin.uri:
-        url: >-
-          {{ ao_api_base_url }}/service_accounts/{{ ao_eda_service_account_id }}/credentials/
-          {{ (_ao_service_account_credentials.json.resources | first).id }}/rotate
+        url: "{{ ao_api_base_url }}/service_accounts/{{ ao_eda_service_account_id }}/credentials/{{ _ao_eda_credential_id }}/rotate"
         method: POST
         headers:
           Authorization: "Bearer {{ ao_access_token }}"
