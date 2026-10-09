@@ -53,6 +53,29 @@ nodes:
       llm_model_id: __AO_LLM_MODEL_ID__
       credential_id: __AO_LLM_CREDENTIAL_ID__
       tool_selection_strategy: NONE
+      response_schema:
+        type: object
+        properties:
+          operation:
+            type: string
+            enum: [create_pr, update_pr]
+          owner: {type: string}
+          repository: {type: string}
+          base_branch: {type: string}
+          branch: {type: string}
+          pr_title: {type: string}
+          pr_body: {type: string}
+          commit_message: {type: string}
+          files:
+            type: array
+            items:
+              type: object
+              properties:
+                path: {type: string}
+                content: {type: string}
+              required: [path, content]
+          validation_plan: {type: string}
+        required: [operation, owner, repository, base_branch, branch, pr_title, pr_body, commit_message, files, validation_plan]
       prompt: >-
         Create one minimal, reviewable GitHub pull-request plan from the
         investigation and root-cause analysis. Return only JSON with this shape:

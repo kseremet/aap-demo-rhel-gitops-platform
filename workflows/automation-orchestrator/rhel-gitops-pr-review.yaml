@@ -35,6 +35,27 @@ nodes:
       llm_model_id: __AO_LLM_MODEL_ID__
       credential_id: __AO_LLM_CREDENTIAL_ID__
       tool_selection_strategy: NONE
+      response_schema:
+        type: object
+        properties:
+          operation: {type: string, enum: [update_pr]}
+          owner: {type: string}
+          repository: {type: string}
+          base_branch: {type: string}
+          branch: {type: string}
+          pull_request_number: {type: integer}
+          pr_title: {type: string}
+          commit_message: {type: string}
+          files:
+            type: array
+            items:
+              type: object
+              properties:
+                path: {type: string}
+                content: {type: string}
+              required: [path, content]
+          comment: {type: string}
+        required: [operation, owner, repository, base_branch, branch, pull_request_number, pr_title, commit_message, files, comment]
       prompt: >-
         Based on the feedback below, produce only JSON in this shape:
         {"operation":"update_pr","owner":"...","repository":"...",
