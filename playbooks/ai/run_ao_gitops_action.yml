@@ -62,6 +62,24 @@
         - github
         - validation
 
+    - name: Reject host-absolute paths in the GitOps plan
+      ansible.builtin.assert:
+        that:
+          - _ao_file.path is string
+          - not _ao_file.path.startswith('/')
+        fail_msg: >-
+          GitOps plan file paths must be repository-relative. Invalid path:
+          {{ _ao_file.path }}
+      loop: "{{ _ao_plan.files }}"
+      loop_control:
+        loop_var: _ao_file
+        label: "{{ _ao_file.path | default('missing path') }}"
+      no_log: false
+      tags:
+        - ao
+        - github
+        - validation
+
     - name: Read the base branch reference
       ansible.builtin.uri:
         url: >-
