@@ -101,6 +101,25 @@
 
     - name: Create the GitOps pull-request branch
       ansible.builtin.uri:
+        url: >-
+          {{ github_api_base_url }}/repos/{{ _ao_plan.owner }}/{{ _ao_plan.repository
+          }}/git/ref/heads/{{ _ao_plan.branch }}
+        method: GET
+        headers:
+          Accept: application/vnd.github+json
+          Authorization: "Bearer {{ github_api_token }}"
+          X-GitHub-Api-Version: "2022-11-28"
+        status_code: [200, 404]
+        return_content: true
+      register: _github_branch_ref
+      no_log: false
+      when: _ao_plan.operation | default('create_pr') == 'create_pr'
+      tags:
+        - ao
+        - github
+
+    - name: Create the GitOps pull-request branch when absent
+      ansible.builtin.uri:
         url: "{{ github_api_base_url }}/repos/{{ _ao_plan.owner }}/{{ _ao_plan.repository }}/git/refs"
         method: POST
         headers:
@@ -110,10 +129,12 @@
         body_format: json
         body:
           ref: "refs/heads/{{ _ao_plan.branch }}"
-          sha: "{{ _github_base_ref.json.object.sha }}"
-        status_code: 201
+           sha: "{{ _github_base_ref.json.object.sha }}"
+         status_code: 201
       no_log: false
-      when: _ao_plan.operation | default('create_pr') == 'create_pr'
+      when:
+        - _ao_plan.operation | default('create_pr') == 'create_pr'
+        - _github_branch_ref.status == 404
       tags:
         - ao
         - github
