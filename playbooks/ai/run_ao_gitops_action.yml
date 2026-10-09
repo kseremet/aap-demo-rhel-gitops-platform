@@ -19,7 +19,7 @@
           - ao_plan is defined
           - github_api_token is defined
         fail_msg: The AO workflow must provide ao_plan and the GitHub API credential.
-      no_log: true
+      no_log: false
       tags:
         - ao
         - github
@@ -40,7 +40,7 @@
     - name: Parse the normalized GitOps plan data
       ansible.builtin.set_fact:
         _ao_plan: "{{ ao_plan if ao_plan is mapping else (_ao_plan_text | from_yaml) }}"
-      no_log: true
+      no_log: false
       tags:
         - ao
         - github
@@ -56,7 +56,7 @@
           - _ao_plan.files is sequence
           - _ao_plan.files | length > 0
         fail_msg: The AO plan must define owner, repository, base_branch, branch, and files.
-      no_log: true
+      no_log: false
       tags:
         - ao
         - github
@@ -93,7 +93,7 @@
         status_code: 200
         return_content: true
       register: _github_base_ref
-      no_log: true
+      no_log: false
       when: _ao_plan.operation | default('create_pr') == 'create_pr'
       tags:
         - ao
@@ -112,7 +112,7 @@
           ref: "refs/heads/{{ _ao_plan.branch }}"
           sha: "{{ _github_base_ref.json.object.sha }}"
         status_code: 201
-      no_log: true
+      no_log: false
       when: _ao_plan.operation | default('create_pr') == 'create_pr'
       tags:
         - ao
@@ -145,7 +145,7 @@
         status_code: 201
         return_content: true
       register: _github_pr_response
-      no_log: true
+      no_log: false
       when: _ao_plan.operation | default('create_pr') == 'create_pr'
       tags:
         - ao
@@ -165,7 +165,7 @@
         body:
           body: "{{ _ao_plan.comment }}"
         status_code: 201
-      no_log: true
+      no_log: false
       when:
         - _ao_plan.operation | default('create_pr') == 'update_pr'
         - _ao_plan.pull_request_number is defined

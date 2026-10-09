@@ -23,7 +23,7 @@
     status_code: [200, 404]
     return_content: true
   register: _github_current_file
-  no_log: true
+  no_log: false
 
 - name: Write the planned GitOps file
   ansible.builtin.uri:
@@ -41,7 +41,7 @@
       sha: "{{ _github_current_file.json.sha }}"
     status_code: 200
   when: _github_current_file.status == 200
-  no_log: true
+  no_log: false
 
 - name: Create the planned GitOps file
   ansible.builtin.uri:
@@ -58,4 +58,4 @@
       branch: "{{ _ao_plan.branch }}"
     status_code: 201
   when: _github_current_file.status == 404
-  no_log: true
+  no_log: false
