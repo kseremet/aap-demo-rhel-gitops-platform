@@ -37,21 +37,10 @@
         - ao
         - github
 
-    - name: Parse the normalized GitOps plan
-      ansible.builtin.debug:
-        msg:
-          ao_plan_type: "{{ ao_plan | type_debug }}"
-          normalized_length: "{{ _ao_plan_text | length }}"
-          normalized_preview: "{{ _ao_plan_text[:200] }}"
-      no_log: false
-      tags:
-        - ao
-        - github
-
     - name: Parse the normalized GitOps plan data
       ansible.builtin.set_fact:
         _ao_plan: "{{ ao_plan if ao_plan is mapping else (_ao_plan_text | from_yaml) }}"
-      no_log: false
+      no_log: true
       tags:
         - ao
         - github
