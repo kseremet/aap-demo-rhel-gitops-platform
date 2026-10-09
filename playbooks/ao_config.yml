@@ -293,6 +293,33 @@
 
     - name: Assign the project-user role to the EDA service account
       ansible.builtin.uri:
+        url: "{{ ao_api_base_url }}/role_assignments?principal_id={{ ao_eda_service_account_id }}&project_id={{ ao_project_id }}&limit=100"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ ao_access_token }}"
+        status_code: 200
+        return_content: true
+        validate_certs: "{{ demo_ao_validate_certs }}"
+      register: _ao_eda_role_assignments
+      changed_when: false
+      no_log: true
+      tags:
+        - ao
+        - service_account
+
+    - name: Resolve the existing project-user role assignment
+      ansible.builtin.set_fact:
+        _ao_existing_eda_role_assignment: >-
+          {{ _ao_eda_role_assignments.json.resources | default([])
+             | selectattr('role_name', 'equalto', ao_eda_role_name) | list }}
+      changed_when: false
+      no_log: true
+      tags:
+        - ao
+        - service_account
+
+    - name: Create the project-user role assignment when absent
+      ansible.builtin.uri:
         url: "{{ ao_api_base_url }}/role_assignments"
         method: POST
         headers:
@@ -305,7 +332,8 @@
         status_code: [201, 409]
         return_content: true
         validate_certs: "{{ demo_ao_validate_certs }}"
-      no_log: true
+      when: _ao_existing_eda_role_assignment | length == 0
+      no_log: false
       tags:
         - ao
         - service_account
