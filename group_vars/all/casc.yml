@@ -162,7 +162,6 @@ controller_templates:
     inventory: "{{ demo_ai_inventory_name }}"
     project: "{{ demo_platform_project_name }}"
     playbook: playbooks/ai/forward_event_to_ao.yml
-    ask_variables_on_launch: true
     extra_vars:
       ao_webhook_base_url: "{{ demo_ao_url }}"
     credentials:
@@ -174,6 +173,7 @@ controller_templates:
     inventory: "{{ demo_ai_inventory_name }}"
     project: "{{ demo_platform_project_name }}"
     playbook: playbooks/ai/run_ao_gitops_action.yml
+    ask_variables_on_launch: true
     credentials:
       - GitHub API Access
 
