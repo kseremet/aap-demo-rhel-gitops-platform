@@ -27,9 +27,6 @@ nodes:
 
         Incident payload:
         ${trigger}
-    outputs:
-      investigation: "${result.result.content}"
-
   - id: analyze_gitops_state
     type: agentic
     name: Analyze GitOps state and root cause
@@ -46,9 +43,7 @@ nodes:
         repositories.
 
         Investigation:
-        ${investigate_host.investigation}
-    outputs:
-      analysis: "${result.result.content}"
+        ${investigate_host.result.content}
 
   - id: prepare_gitops_plan
     type: agentic
@@ -72,12 +67,10 @@ nodes:
         ${trigger}
 
         Investigation:
-        ${investigate_host.investigation}
+        ${investigate_host.result.content}
 
         Root-cause analysis:
-        ${analyze_gitops_state.analysis}
-    outputs:
-      ao_plan: "${result.result.content}"
+        ${analyze_gitops_state.result.content}
 
   - id: create_gitops_pr
     type: aap_job_template
@@ -88,7 +81,7 @@ nodes:
       credential_id: __AO_AAP_CREDENTIAL_ID__
       organization_name: RHEL GitOps
       extra_vars:
-        ao_plan: ${prepare_gitops_plan.ao_plan}
+         ao_plan: ${prepare_gitops_plan.result.content}
     outputs:
       job_id: "${result.job_id}"
       job_status: "${result.job_status}"

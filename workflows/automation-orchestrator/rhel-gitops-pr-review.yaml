@@ -27,9 +27,6 @@ nodes:
 
         Event payload:
         ${trigger}
-    outputs:
-      feedback: "${result.result.content}"
-
   - id: plan_revision
     type: agentic
     name: Plan the minimal repository revision
@@ -48,9 +45,7 @@ nodes:
         it.
 
         Feedback analysis:
-        ${understand_feedback.feedback}
-    outputs:
-      ao_plan: "${result.result.content}"
+        ${understand_feedback.result.content}
 
   - id: apply_revision
     type: aap_job_template
@@ -61,7 +56,7 @@ nodes:
       credential_id: __AO_AAP_CREDENTIAL_ID__
       organization_name: RHEL GitOps
       extra_vars:
-        ao_plan: ${plan_revision.ao_plan}
+         ao_plan: ${plan_revision.result.content}
     outputs:
       job_id: "${result.job_id}"
       job_status: "${result.job_status}"
