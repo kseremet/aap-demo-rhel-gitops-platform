@@ -28,7 +28,7 @@ nodes:
         Incident payload:
         ${trigger}
     outputs:
-      investigation: "${result.content}"
+      investigation: "${result.result.content}"
 
   - id: analyze_gitops_state
     type: agentic
@@ -48,7 +48,7 @@ nodes:
         Investigation:
         ${investigate_host.investigation}
     outputs:
-      analysis: "${result.content}"
+      analysis: "${result.result.content}"
 
   - id: prepare_gitops_plan
     type: agentic
@@ -77,7 +77,7 @@ nodes:
         Root-cause analysis:
         ${analyze_gitops_state.analysis}
     outputs:
-      ao_plan: "${result.content}"
+      ao_plan: "${result.result.content}"
 
   - id: create_gitops_pr
     type: aap_job_template

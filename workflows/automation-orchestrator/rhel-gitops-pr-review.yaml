@@ -28,7 +28,7 @@ nodes:
         Event payload:
         ${trigger}
     outputs:
-      feedback: "${result.content}"
+      feedback: "${result.result.content}"
 
   - id: plan_revision
     type: agentic
@@ -50,7 +50,7 @@ nodes:
         Feedback analysis:
         ${understand_feedback.feedback}
     outputs:
-      ao_plan: "${result.content}"
+      ao_plan: "${result.result.content}"
 
   - id: apply_revision
     type: aap_job_template
