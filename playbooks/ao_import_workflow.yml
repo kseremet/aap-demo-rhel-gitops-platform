@@ -9,9 +9,9 @@
     _ao_trigger: >-
       {{ _ao_workflow_definition.triggers[0]
          | combine({'parameters':
-             (_ao_workflow_definition.triggers[0].parameters
-              | combine({'webhook_path': ao_workflow.webhook_path,
-                         'authorized_service_account_ids': []}))}) }}
+              (_ao_workflow_definition.triggers[0].parameters
+               | combine({'webhook_path': ao_workflow.webhook_path,
+                          'authorized_service_account_ids': [ao_eda_service_account_id]}))}) }}
   no_log: true
 
 - name: Apply the concrete EDA trigger configuration to the workflow

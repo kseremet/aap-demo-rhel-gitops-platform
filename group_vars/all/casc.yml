@@ -37,6 +37,26 @@ controller_credential_types:
     injectors:
       extra_vars:
         github_api_token: "{{ '{{ github_token }}' }}"
+  - name: Automation Orchestrator Service Account
+    description: Client credentials used by EDA to trigger AO workflows.
+    kind: cloud
+    inputs:
+      fields:
+        - id: client_id
+          type: string
+          label: AO client ID
+          secret: false
+        - id: client_secret
+          type: string
+          label: AO client secret
+          secret: true
+      required:
+        - client_id
+        - client_secret
+    injectors:
+      extra_vars:
+        ao_webhook_client_id: "{{ '{{ client_id }}' }}"
+        ao_webhook_client_secret: "{{ '{{ client_secret }}' }}"
 
 controller_inventories:
   - name: "{{ demo_inventory_name }}"
@@ -136,6 +156,8 @@ controller_templates:
     playbook: playbooks/ai/forward_event_to_ao.yml
     extra_vars:
       ao_webhook_base_url: "{{ demo_ao_url }}"
+    credentials:
+      - Automation Orchestrator Service Account
   - name: JT - AO GitOps Action
     description: Create or update a GitHub pull request from an AO structured plan.
     organization: "{{ demo_organization_name }}"

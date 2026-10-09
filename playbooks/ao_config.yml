@@ -1,7 +1,7 @@
 # Description: Configure Automation Orchestrator with the demo project and
 # version-controlled agentic workflows. Run after the AO instance is available.
-# This playbook uses the local admin login only for AO configuration; EDA trigger
-# calls remain unauthenticated because these are disposable demo workflows.
+# This playbook uses the local admin login only for AO configuration. It also
+# rotates the disposable EDA service-account credential used by the AAP bridge.
 ---
 - name: Configure Automation Orchestrator workflows
   hosts: localhost
@@ -19,6 +19,7 @@
       - name: rhel-gitops-pr-review
         path: "{{ playbook_dir }}/../workflows/automation-orchestrator/rhel-gitops-pr-review.yaml"
         webhook_path: "{{ demo_ao_pr_review_eda_trigger_path }}"
+    ao_eda_service_account_name: RHEL GitOps EDA Trigger
     ao_integrations:
       - name: "{{ demo_ao_aap_integration_name }}"
         integration_type: ansible_automation_platform
@@ -147,6 +148,158 @@
       tags:
         - ao
         - project
+
+    - name: List AO service accounts
+      ansible.builtin.uri:
+        url: "{{ ao_api_base_url }}/service_accounts?limit=100"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ ao_access_token }}"
+        status_code: 200
+        return_content: true
+        validate_certs: "{{ demo_ao_validate_certs }}"
+      register: _ao_service_accounts
+      changed_when: false
+      no_log: true
+      tags:
+        - ao
+        - service_account
+
+    - name: Resolve the AO EDA service account
+      ansible.builtin.set_fact:
+        _ao_existing_service_account: >-
+          {{ _ao_service_accounts.json.resources | default([])
+             | selectattr('name', 'equalto', ao_eda_service_account_name)
+             | selectattr('project_id', 'equalto', ao_project_id)
+             | list | first | default({}) }}
+      changed_when: false
+      no_log: true
+      tags:
+        - ao
+        - service_account
+
+    - name: Create the AO EDA service account when absent
+      ansible.builtin.uri:
+        url: "{{ ao_api_base_url }}/service_accounts"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ ao_access_token }}"
+        body_format: json
+        body:
+          name: "{{ ao_eda_service_account_name }}"
+          description: Service account used by AAP EDA to trigger GitOps workflows.
+          project_id: "{{ ao_project_id }}"
+        status_code: 201
+        return_content: true
+        validate_certs: "{{ demo_ao_validate_certs }}"
+      register: _ao_created_service_account
+      when: _ao_existing_service_account.id is not defined
+      no_log: true
+      tags:
+        - ao
+        - service_account
+
+    - name: Resolve the AO EDA service account ID
+      ansible.builtin.set_fact:
+        ao_eda_service_account_id: >-
+          {{ _ao_created_service_account.json.id
+             if (_ao_created_service_account is defined and _ao_created_service_account.json is defined)
+             else _ao_existing_service_account.id }}
+      changed_when: false
+      no_log: true
+      tags:
+        - ao
+        - service_account
+
+    - name: List credentials for the AO EDA service account
+      ansible.builtin.uri:
+        url: "{{ ao_api_base_url }}/service_accounts/{{ ao_eda_service_account_id }}/credentials?limit=100"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ ao_access_token }}"
+        status_code: 200
+        return_content: true
+        validate_certs: "{{ demo_ao_validate_certs }}"
+      register: _ao_service_account_credentials
+      changed_when: false
+      no_log: true
+      tags:
+        - ao
+        - service_account
+
+    - name: Create the AO EDA client credential when absent
+      ansible.builtin.uri:
+        url: "{{ ao_api_base_url }}/service_accounts/{{ ao_eda_service_account_id }}/credentials"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ ao_access_token }}"
+        body_format: json
+        body:
+          credential_type: client_credentials
+        status_code: 201
+        return_content: true
+        validate_certs: "{{ demo_ao_validate_certs }}"
+      register: _ao_created_service_account_credential
+      when: (_ao_service_account_credentials.json.resources | default([]) | length) == 0
+      no_log: true
+      tags:
+        - ao
+        - service_account
+
+    - name: Rotate the existing AO EDA client credential
+      ansible.builtin.uri:
+        url: >-
+          {{ ao_api_base_url }}/service_accounts/{{ ao_eda_service_account_id }}/credentials/
+          {{ (_ao_service_account_credentials.json.resources | first).id }}/rotate
+        method: POST
+        headers:
+          Authorization: "Bearer {{ ao_access_token }}"
+        body_format: json
+        body:
+          grace_period_seconds: 3600
+        status_code: 200
+        return_content: true
+        validate_certs: "{{ demo_ao_validate_certs }}"
+      register: _ao_rotated_service_account_credential
+      when: (_ao_service_account_credentials.json.resources | default([]) | length) > 0
+      no_log: true
+      tags:
+        - ao
+        - service_account
+
+    - name: Resolve the current AO EDA client credentials
+      ansible.builtin.set_fact:
+        ao_eda_client_id: >-
+          {{ (_ao_created_service_account_credential.json
+              if (_ao_created_service_account_credential is defined and _ao_created_service_account_credential.json is defined)
+              else _ao_rotated_service_account_credential.json).identifier }}
+        ao_eda_client_secret: >-
+          {{ (_ao_created_service_account_credential.json
+              if (_ao_created_service_account_credential is defined and _ao_created_service_account_credential.json is defined)
+              else _ao_rotated_service_account_credential.json).client_secret }}
+      no_log: true
+      tags:
+        - ao
+        - service_account
+
+    - name: Assign the AO workflow-executor role to the EDA service account
+      ansible.builtin.uri:
+        url: "{{ ao_api_base_url }}/role_assignments"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ ao_access_token }}"
+        body_format: json
+        body:
+          principal_id: "{{ ao_eda_service_account_id }}"
+          role_name: workflow-executor
+          project_id: "{{ ao_project_id }}"
+        status_code: [201, 409]
+        return_content: true
+        validate_certs: "{{ demo_ao_validate_certs }}"
+      no_log: true
+      tags:
+        - ao
+        - service_account
 
     - name: Create or reconcile AO project integrations and credentials
       ansible.builtin.include_tasks: ao_ensure_integration.yml

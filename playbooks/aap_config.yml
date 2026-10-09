@@ -35,10 +35,14 @@
               demo_ao_url is defined
               and demo_ao_url not in ['', 'CHANGE_ME_AUTOMATION_ORCHESTRATOR_URL']
             )
+          - >-
+            demo_ai_backend != 'automation_orchestrator'
+            or (ao_eda_client_id is defined and ao_eda_client_secret is defined)
         fail_msg: >-
           Run VM discovery first and configure AAP, SCM, SSH key, and selected
-          AI backend values before applying CasC. For the AO backend, provide
-          the Automation Orchestrator URL.
+          AI backend values before applying CasC. For the AO backend, run
+          playbooks/casc.yml so the AO service-account credential is available
+          to the AAP Event Bridge configuration.
 
     - name: Set AAP authentication variables
       ansible.builtin.set_fact:

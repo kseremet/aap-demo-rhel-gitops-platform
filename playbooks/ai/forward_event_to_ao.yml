@@ -1,6 +1,6 @@
 # Description: Forward an EDA event to an Automation Orchestrator EDA trigger.
 # EDA remains the GitHub ingress and filtering layer; this playbook forwards the
-# original event payload to the demo's unauthenticated AO EDA trigger.
+# original event payload to the AO EDA trigger using a project service account.
 ---
 - name: Forward an event to Automation Orchestrator
   hosts: localhost
@@ -17,11 +17,33 @@
           - ao_webhook_base_url is defined
           - ao_webhook_path is defined
           - ao_webhook_path | length > 0
+          - ao_webhook_client_id is defined
+          - ao_webhook_client_secret is defined
         fail_msg: Configure the Automation Orchestrator URL and EDA trigger path.
       no_log: true
       tags:
         - ao
         - validation
+
+    - name: Request an AO access token for the EDA service account
+      ansible.builtin.uri:
+        url: "{{ ao_webhook_base_url | regex_replace('/+$', '') }}/api/v1/auth/token"
+        method: POST
+        headers:
+          Content-Type: application/x-www-form-urlencoded
+        body_format: form-urlencoded
+        body:
+          grant_type: client_credentials
+          client_id: "{{ ao_webhook_client_id }}"
+          client_secret: "{{ ao_webhook_client_secret }}"
+        status_code: 200
+        return_content: true
+        validate_certs: "{{ aap_validate_certs }}"
+      register: _ao_token_response
+      no_log: true
+      tags:
+        - ao
+        - authentication
 
     - name: Forward the original EDA payload to Automation Orchestrator
       ansible.builtin.uri:
@@ -29,6 +51,8 @@
           {{ ao_webhook_base_url | regex_replace('/+$', '')
              }}/api/v1/webhooks/eda/{{ ao_webhook_path }}
         method: POST
+        headers:
+          Authorization: "Bearer {{ _ao_token_response.json.access_token }}"
         body_format: json
         body: "{{ ao_event_payload }}"
         status_code: [200, 201, 202]

@@ -1,0 +1,7 @@
+# Description: Configure Automation Orchestrator before AAP so runtime facts
+# can supply the freshly rotated EDA service-account credential to AAP CasC.
+---
+- name: Configure Automation Orchestrator and AAP
+  ansible.builtin.import_playbook: ao_config.yml
+- name: Configure AAP after Automation Orchestrator
+  ansible.builtin.import_playbook: aap_config.yml
