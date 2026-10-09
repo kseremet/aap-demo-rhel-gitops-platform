@@ -20,6 +20,7 @@
         path: "{{ playbook_dir }}/../workflows/automation-orchestrator/rhel-gitops-pr-review.yaml"
         webhook_path: "{{ demo_ao_pr_review_eda_trigger_path }}"
     ao_eda_service_account_name: RHEL GitOps EDA Trigger
+    ao_eda_role_name: RHEL GitOps Workflow Runner
     ao_integrations:
       - name: "{{ demo_ao_aap_integration_name }}"
         integration_type: ansible_automation_platform
@@ -282,7 +283,62 @@
         - ao
         - service_account
 
-    - name: Assign the AO workflow-executor role to the EDA service account
+    - name: List AO project roles
+      ansible.builtin.uri:
+        url: "{{ ao_api_base_url }}/roles?limit=100"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ ao_access_token }}"
+        status_code: 200
+        return_content: true
+        validate_certs: "{{ demo_ao_validate_certs }}"
+      register: _ao_roles
+      changed_when: false
+      no_log: true
+      tags:
+        - ao
+        - service_account
+
+    - name: Resolve the AO EDA workflow runner role
+      ansible.builtin.set_fact:
+        _ao_existing_eda_role: >-
+          {{ _ao_roles.json.resources | default([])
+             | selectattr('name', 'equalto', ao_eda_role_name)
+             | selectattr('project_id', 'equalto', ao_project_id)
+             | list | first | default({}) }}
+      changed_when: false
+      no_log: true
+      tags:
+        - ao
+        - service_account
+
+    - name: Create the AO EDA workflow runner role when absent
+      ansible.builtin.uri:
+        url: "{{ ao_api_base_url }}/roles"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ ao_access_token }}"
+        body_format: json
+        body:
+          name: "{{ ao_eda_role_name }}"
+          description: Project-scoped permissions for the AAP EDA AO bridge.
+          policies:
+            - project:read:project
+            - workflow:read:project
+            - execution:read:project
+            - execution:run:project
+          project_id: "{{ ao_project_id }}"
+        status_code: 201
+        return_content: true
+        validate_certs: "{{ demo_ao_validate_certs }}"
+      register: _ao_created_eda_role
+      when: _ao_existing_eda_role.id is not defined
+      no_log: true
+      tags:
+        - ao
+        - service_account
+
+    - name: Assign the AO EDA workflow runner role to the service account
       ansible.builtin.uri:
         url: "{{ ao_api_base_url }}/role_assignments"
         method: POST
@@ -291,7 +347,7 @@
         body_format: json
         body:
           principal_id: "{{ ao_eda_service_account_id }}"
-          role_name: workflow-executor
+          role_name: "{{ ao_eda_role_name }}"
           project_id: "{{ ao_project_id }}"
         status_code: [201, 409]
         return_content: true
