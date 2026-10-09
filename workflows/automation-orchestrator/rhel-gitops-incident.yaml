@@ -76,7 +76,7 @@ nodes:
                   pattern: "^(?!/)(?!.*\\.\\.).+$"
                 content: {type: string}
               required: [path, content]
-         validation_plan: {type: string}
+          validation_plan: {type: string}
         required: [operation, owner, repository, base_branch, branch, pr_title, pr_body, commit_message, files, validation_plan]
       prompt: >-
         Create one minimal, reviewable GitHub pull-request plan from the
