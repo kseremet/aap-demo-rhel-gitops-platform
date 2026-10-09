@@ -129,8 +129,8 @@
         body_format: json
         body:
           ref: "refs/heads/{{ _ao_plan.branch }}"
-           sha: "{{ _github_base_ref.json.object.sha }}"
-         status_code: 201
+          sha: "{{ _github_base_ref.json.object.sha }}"
+        status_code: 201
       no_log: false
       when:
         - _ao_plan.operation | default('create_pr') == 'create_pr'
