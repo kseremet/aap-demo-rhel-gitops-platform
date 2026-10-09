@@ -27,7 +27,12 @@
 
     - name: Normalize the structured GitOps plan
       ansible.builtin.set_fact:
-        _ao_plan: "{{ ao_plan if ao_plan is mapping else (ao_plan | from_json) }}"
+        _ao_plan: >-
+          {{ ao_plan if ao_plan is mapping else
+             (ao_plan
+              | regex_replace('^\\s*```(?:json)?\\s*', '')
+              | regex_replace('\\s*```\\s*$', '')
+              | from_json) }}
       no_log: true
       tags:
         - ao
