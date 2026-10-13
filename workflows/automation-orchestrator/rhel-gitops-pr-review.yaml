@@ -66,11 +66,11 @@ nodes:
         required: [operation, owner, repository, base_branch, branch, pull_request_number, pr_title, commit_message, files, comment]
       prompt: >-
          Based on the feedback below, produce only JSON in this shape:
-         Before producing the plan, use the read-only GitHub MCP tools to inspect
-         the repository tree and read the exact files relevant to the requested
-         revision. Every files[].path must be an existing repository-relative
-         path verified through MCP. Never invent repository paths or claim
-         changes were made to files you did not read.
+        Before producing the plan, use the read-only GitHub MCP tools to inspect
+        the repository tree and read the exact files relevant to the requested
+        revision. Every files[].path must be an existing repository-relative
+        path verified through MCP. Never invent repository paths or claim
+        changes were made to files you did not read.
          {"operation":"update_pr","owner":"...","repository":"...",
         "base_branch":"main","branch":"...","pull_request_number":0,
         "pr_title":"...","commit_message":"...","files":[{"path":"...",
