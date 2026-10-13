@@ -42,11 +42,16 @@ nodes:
         - integration_id: __AO_GITHUB_MCP_INTEGRATION_ID__
           credential_id: __AO_GITHUB_MCP_CREDENTIAL_ID__
       prompt: >-
-        Analyze the investigation below against the GitOps repository context
-        available to you. Explain variable precedence and determine the minimum
-        safe repository change. Return JSON with root_cause, relevant_files,
-        proposed_change, confidence, and validation_plan. Do not modify hosts or
-        repositories.
+         Analyze the investigation below against the GitOps repository context
+         available to you. Before reaching a conclusion, you MUST use the
+         read-only GitHub MCP tools to inspect the repository tree, search for
+         the relevant configuration, and read the exact files that could control
+         the observed behavior. Explain variable precedence and determine the
+         minimum safe repository change. Every file path and current value in
+         your response must be supported by repository evidence. Never invent a
+         filename, path, setting, or current value. Return JSON with root_cause,
+         relevant_files, proposed_change, confidence, and validation_plan. Do not
+         modify hosts or repositories.
 
         Investigation:
         ${investigate_host.result.content}
@@ -88,8 +93,16 @@ nodes:
           validation_plan: {type: string}
         required: [operation, owner, repository, base_branch, branch, pr_title, pr_body, commit_message, files, validation_plan]
       prompt: >-
-        Create one minimal, reviewable GitHub pull-request plan from the
-        investigation and root-cause analysis. Return only JSON with this shape:
+         Create one minimal, reviewable GitHub pull-request plan from the
+         investigation and root-cause analysis. You MUST use the read-only
+         GitHub MCP tools before creating the plan: inspect the repository tree,
+         search for the relevant setting, and read every file you propose to
+         change. The files array must contain only existing repository-relative
+         paths verified through MCP. Preserve the repository's existing format
+         and structure. Do not invent a path or claim a current value that was
+         not observed in the repository or investigation. If the evidence is
+         insufficient for a safe change, do not fabricate a remediation.
+         Return only JSON with this shape:
         {"operation":"create_pr","owner":"...","repository":"...",
         "base_branch":"main","branch":"aiops/incident-remediation",
         "pr_title":"...","pr_body":"...","commit_message":"...",
