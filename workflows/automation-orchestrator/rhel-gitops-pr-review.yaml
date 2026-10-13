@@ -68,9 +68,14 @@ nodes:
         Based on the feedback below, produce only JSON in this shape:
         Before producing the plan, use the read-only GitHub MCP tools to inspect
         the repository tree and read the exact files relevant to the requested
-        revision. Every files[].path must be an existing repository-relative
-        path verified through MCP. Never invent repository paths or claim
-        changes were made to files you did not read.
+        revision. Use GitHub MCP tools only; do not use Linux diagnostic tools.
+        Start by searching or listing the repository, and do not call
+        get_file_contents until the exact path is verified. If a tool reports a
+        missing path, do not retry the same path. Use no more than three
+        repository inspection calls, then stop using tools and return the
+        structured plan. Every files[].path must be an existing
+        repository-relative path verified through MCP. Never invent repository
+        paths or claim changes were made to files you did not read.
         {"operation":"update_pr","owner":"...","repository":"...",
         "base_branch":"main","branch":"...","pull_request_number":0,
         "pr_title":"...","commit_message":"...","files":[{"path":"...",

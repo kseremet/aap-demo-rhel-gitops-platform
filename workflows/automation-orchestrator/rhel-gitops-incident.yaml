@@ -95,9 +95,14 @@ nodes:
       prompt: >-
         Create one minimal, reviewable GitHub pull-request plan from the
         investigation and root-cause analysis. You MUST use the read-only
-        GitHub MCP tools before creating the plan: inspect the repository tree,
-        search for the relevant setting, and read every file you propose to
-        change. The files array must contain only existing repository-relative
+        GitHub MCP tools before creating the plan. Use GitHub MCP tools only;
+        do not use Linux diagnostic tools in this step. Start by searching or
+        listing the repository, and only call get_file_contents after verifying
+        the exact path. If a tool reports that a path does not exist, do not
+        retry the same path; search for the correct path or stop with an
+        evidence-based plan. Use no more than three repository inspection calls.
+        After that, stop using tools and return the structured plan. The files
+        array must contain only existing repository-relative
         paths verified through MCP. Preserve the repository's existing format
         and structure. Do not invent a path or claim a current value that was
         not observed in the repository or investigation. If the evidence is
