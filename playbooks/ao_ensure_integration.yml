@@ -227,5 +227,16 @@
   ansible.builtin.set_fact:
     ao_mcp_integration_id: "{{ ao_integration_id }}"
     ao_mcp_credential_id: "{{ ao_integration_credential_id }}"
-  when: ao_integration.integration_type == 'mcp_server'
+  when:
+    - ao_integration.integration_type == 'mcp_server'
+    - ao_integration.name == demo_ao_mcp_integration_name
+  changed_when: false
+
+- name: Store the project GitHub MCP integration ID
+  ansible.builtin.set_fact:
+    ao_github_mcp_integration_id: "{{ ao_integration_id }}"
+    ao_github_mcp_credential_id: "{{ ao_integration_credential_id }}"
+  when:
+    - ao_integration.integration_type == 'mcp_server'
+    - ao_integration.name == demo_ao_github_mcp_integration_name
   changed_when: false

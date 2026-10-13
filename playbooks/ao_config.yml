@@ -55,6 +55,17 @@
           allow_http: true
           insecure_skip_tls_verify: true
         refresh: true
+      - name: "{{ demo_ao_github_mcp_integration_name }}"
+        integration_type: mcp_server
+        credential_type_name: HTTP Bearer Token
+        credential_inputs:
+          token: "{{ vault_github_token }}"
+        configuration:
+          integration_type: mcp_server
+          base_url: "{{ demo_ao_github_mcp_url }}"
+          allow_http: true
+          insecure_skip_tls_verify: true
+        refresh: true
   tasks:
     - name: Validate Automation Orchestrator configuration inputs
       ansible.builtin.assert:
@@ -359,8 +370,12 @@
           - ao_llm_credential_id is defined
           - ao_llm_credential_id is not none
           - ao_llm_credential_id | string != 'None'
-          - ao_llm_model_id is defined
-          - ao_mcp_integration_id is defined
+           - ao_llm_model_id is defined
+           - ao_mcp_integration_id is defined
+           - ao_github_mcp_integration_id is defined
+           - ao_github_mcp_credential_id is defined
+           - ao_github_mcp_credential_id is not none
+           - ao_github_mcp_credential_id | string != 'None'
         fail_msg: >-
           AO integrations or the configured LLM model could not be discovered.
           Check the AAP/LLM/MCP endpoints and AO's internal MCP hostname allowlist.

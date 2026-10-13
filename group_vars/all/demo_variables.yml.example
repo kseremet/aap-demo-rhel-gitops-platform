@@ -50,6 +50,8 @@ demo_ao_aap_integration_name: RHEL GitOps AAP
 demo_ao_llm_integration_name: RHEL GitOps LLM
 demo_ao_mcp_integration_name: RHEL GitOps Linux MCP
 demo_ao_mcp_url: http://linux-mcp-server:8000/mcp
+demo_ao_github_mcp_integration_name: RHEL GitOps GitHub MCP
+demo_ao_github_mcp_url: http://github-mcp-server:8082/mcp
 demo_ao_project_name: RHEL GitOps Agentic Workflows
 # `container` uses the in-namespace OpenShift Service; set `local` to use the
 # Linux MCP server installed on the AI VM over stdio instead.
