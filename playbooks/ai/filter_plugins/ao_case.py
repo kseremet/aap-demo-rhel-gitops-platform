@@ -255,6 +255,10 @@ def repository_snapshot(context, commit, tree, responses):
 
 
 def finish_collection(snapshot, facts, inventory_groups, job_id, sysctl_results=None):
+    # The temporary execution group is not part of the managed inventory policy.
+    inventory_groups = [
+        name for name in inventory_groups if name != "ao_evidence_target"
+    ]
     # Never export ansible_env, SSH inputs, hostvars, or controller credentials.
     keys = (
         "hostname",

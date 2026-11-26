@@ -28,7 +28,7 @@ Tracks testing progress for this demo. For procedural verification steps, see [s
 
 | AO Prepare Proposal (`ai/prepare_ao_proposal.yml`) | Partial | 2026-11-27 | Local Ansible execution computes exact typed YAML changes without credentials or mutations; invalid/no-op candidates remain blocked. Live full publication testing remains pending. |
 
-| AO Evidence Validation (`ai/validate_ao_evidence.yml`) | Partial | 2026-11-26 | Read-only runtime provenance, commit/host scope, exact excerpts, typed JSON fields, and blocker resolution checks implemented. Local Ansible execution returns routable valid/blocked artifacts. Live CasC creation succeeded after refreshing the platform Project; live AAP job execution remains pending. |
+| AO Evidence Validation (`ai/validate_ao_evidence.yml`) | Partial | 2026-11-27 | Read-only runtime provenance, commit/host scope, exact excerpts, typed JSON fields, and blocker resolution checks implemented. Local Ansible execution returns routable valid/blocked artifacts. Live CasC creation succeeded after refreshing the platform Project; isolated live AAP evidence validation passed; full publication remains pending. |
 
 | AO Event Bridge (`ai/forward_event_to_ao.yml`) | Partial | 2026-11-26 | Clean SCM checkout test passed without ignored local configuration files. CasC explicitly enables launch variables and supplies TLS configuration. Live EDA-to-AO validation remains pending. |
 
@@ -36,8 +36,8 @@ Tracks testing progress for this demo. For procedural verification steps, see [s
 
 | Component | Status | Last tested | Notes |
 |---|---|---|---|
-| AO incident investigation (`rhel-gitops-incident.yaml`) | Partial | 2026-11-26 | Three agents investigate, propose and independently review, preceded by deterministic read-only collection; explicit no-write branches remain. Importer substitutions, AO schemas, and routing checks using AO expression resolution passed. Deployed AO API validation passed with zero findings. Isolated GitHub and Linux tool calls succeeded after repairing stale SSH aliases; full incident-to-PR validation remains pending. |
-| AO PR review (`rhel-gitops-pr-review.yaml`) | Partial | 2026-11-26 | Uses the same evidence/review harness while preserving PR identity and distinguishing revision requests from questions/approval. Importer substitutions, AO schemas, and routing checks passed. Explicit read-only tools, runtime evidence validation, and blocker gates added. Deployed AO API validation passed; live maintainer-feedback validation remains pending. |
+| AO incident investigation (`rhel-gitops-incident.yaml`) | Partial | 2026-11-27 | Three agents investigate, propose and independently review, preceded by deterministic read-only collection; explicit no-write branches remain. Importer substitutions, AO schemas, and routing checks using AO expression resolution passed. Deployed AO API validation passed with zero findings. Isolated GitHub and Linux tool calls succeeded after repairing stale SSH aliases; full incident-to-PR validation remains pending. |
+| AO PR review (`rhel-gitops-pr-review.yaml`) | Partial | 2026-11-27 | Uses the same evidence/review harness while preserving PR identity and distinguishing revision requests from questions/approval. Importer substitutions, AO schemas, and routing checks passed. Explicit read-only tools, runtime evidence validation, and blocker gates added. Deployed AO API validation passed; live maintainer-feedback validation remains pending. |
 
 ## Current harness validation
 
@@ -61,8 +61,7 @@ Tracks testing progress for this demo. For procedural verification steps, see [s
   long evidence ID. Regression checks prove genuine AAP measurements can support
   an observed-value proposal while context-only or invented evidence cannot.
 - The updated fixed adapter helper deployed successfully. The temporary probes
-  contain no publication node. Final three-agent probe results are recorded below
-  when complete. No real PR was created by these checks.
+  contain no publication node. No real PR was created by these checks.
 
 - 2026-11-27: The final read-only collector `6440` returned actual somaxconn
   `65535`, 22 pinned repository files, and real LV/VG/mount measurements. A
@@ -73,6 +72,16 @@ Tracks testing progress for this demo. For procedural verification steps, see [s
   Dedicated tests verify exact leaf expansion, no-op/comment rejection, literal
   preservation, and that preparation cannot replace independent approval. The full
   206-test suite, focused lint, and deployed AO schema validation passed.
+
+- 2026-11-27: Final isolated run `dc28e6d1-8a66-45cd-b086-893832c64db9`
+  completed through all three agents, AAP preparation `6449`, and AAP evidence
+  validation `6451`. It proposed a host-only somaxconn `65535` override with
+  independent approval, `valid: true`, and no blocking findings. The deployed
+  preparation preserved the pinned loader text byte-for-byte and computed the
+  two exact scalar leaf changes. Publication preflight passed against the real
+  pinned snapshot and actual reviewer output; the PR preview was 5,531 characters.
+  The probe contained no publication node. Temporary probe workflows were removed.
+  Current drafts are incident version 27 and PR-feedback version 17.
 
 Full incident-to-PR and maintainer-feedback tests remain pending; status is Partial.
 

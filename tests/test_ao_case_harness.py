@@ -75,7 +75,7 @@ def foundation():
                 }
             ],
         },
-        ["web_servers"],
+        ["ao_evidence_target", "web_servers"],
         123,
     )
 
@@ -86,6 +86,8 @@ def test_collector_reads_baseline_and_keeps_selected_measurements_only():
     assert data["host_facts"]["lvm"]["vgs"]["vg_data"]["free_g"] == "10.00"
     assert "never export" not in json.dumps(data)
     assert data["packet"]["collection_complete"] is True
+    assert data["inventory_groups"] == ["web_servers"]
+    assert data["packet"]["inventory_groups"] == ["web_servers"]
 
 
 @pytest.mark.parametrize(
