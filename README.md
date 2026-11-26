@@ -267,6 +267,6 @@ The current AO release can use embedded GitHub file contents through the
 [GitHub MCP text compatibility sidecar](docs/github-mcp-text-adapter.md), enabled
 by combined CasC. It leaves the installed AO source and image unchanged.
 
-The harness also requires AO script nodes for compact, bounded JSON handoffs.
-See [the explicit demo-instance opt-in and rollback](docs/ao-harness.md#enable-script-nodes-on-the-trusted-demo-instance)
-before enabling that Developer Preview setting.
+The harness prepares compact handoffs over native HTTP to the existing adapter
+and retrieves oversized contexts through MCP. Script-node execution is optional;
+see [handoff transport and configuration](docs/ao-harness.md#compact-handoffs-and-the-invocation-api-limit).

@@ -224,3 +224,41 @@ def test_pinned_file_read_supports_actual_mcp_revision_parameter_names(
     args.pop("ref")
     args.update(refs)
     assert verdict(report, packet)["valid"] is valid
+
+
+def test_reading_a_handoff_is_never_independent_evidence(handoff):
+    report = handoff[1]
+    packet = runtime_evidence(report)
+    packet["context"] = {
+        "id": "packet-reader",
+        "result": {
+            "agent_trace": {
+                "steps": [
+                    {
+                        "type": "tool_call",
+                        "call_id": "packet",
+                        "tool_name": "read_handoff",
+                        "tool_input": {"packet_id": "opaque"},
+                    },
+                    {
+                        "type": "tool_result",
+                        "call_id": "packet",
+                        "tool_name": "read_handoff",
+                        "status": "success",
+                        "tool_output": "unverified upstream claim",
+                    },
+                ]
+            }
+        },
+    }
+    assert all(r["tool"] != "read_handoff" for r in MODULE.successful_results(packet))
+    report["evidence"].append(
+        {
+            "id": "claimed-packet",
+            "tool": "read_handoff",
+            "source": "web-01",
+            "observation": "Claimed fact",
+            "tool_output_excerpt": "unverified upstream claim",
+        }
+    )
+    assert not verdict(report, packet)["valid"]

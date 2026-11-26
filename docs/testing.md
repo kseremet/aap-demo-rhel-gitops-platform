@@ -37,6 +37,24 @@ Tracks testing progress for this demo. For procedural verification steps, see [s
 
 ## Latest local validation
 
+- 2026-11-26: Final-assessment preparation in execution
+  `81c2f3b2-547e-4d50-bff1-39f300ef6b85` exceeded the initial invocation limit:
+  the complete compact prompt was 13,904 characters. AO masked the script's
+  original exception by mapping a missing `stdout_json.characters`. The replay
+  also exposed the script runner's 32 KiB environment-value limit: the loop
+  supplied about 55 KiB. Replaced preparation with native HTTP requests, mapped
+  complete HTTP results, and added complete overflow context retrieval via
+  the existing adapter's bounded in-memory handoff store and read-only
+  `read_handoff` tool. No evidence or blockers are truncated. Packet reads are
+  excluded from independent diagnostic evidence. Both workflow drafts validated
+  with zero findings. Local expiry/quota, exact round-trip, mapping, provenance,
+  importer/schema, and loop tests passed: all 150 local tests passed. Exact-input
+  isolated replay `73d54b5d-ae9c-4aa8-9cd4-112d11dddbf3` completed both HTTP
+  preparation and final assessment. The initial prompt was 2,290 characters;
+  the complete case was 13,904. The assessor actually called `read_handoff`.
+  No AAP/publication nodes existed in the temporary probe, which was removed
+  afterward. Full incident/PR feedback remains Partial.
+
 - 2026-11-26: Diagnosed the later `review_evidence` failure in execution
   `c3658946-ba73-4c9d-bd02-2d7fb68e653f`: backend logs show HTTP 422 because
   its resolved prompt was 74,300 characters and the invocation API permits

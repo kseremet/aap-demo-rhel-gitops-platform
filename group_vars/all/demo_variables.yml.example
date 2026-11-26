@@ -42,7 +42,8 @@ demo_ai_pr_branch_prefix: aiops/
 demo_ai_backend: automation_orchestrator
 demo_ao_url: CHANGE_ME_AUTOMATION_ORCHESTRATOR_URL
 demo_ao_username: admin
-# The harness uses Python script nodes for bounded JSON handoffs. This Developer
+# Optional script nodes for other demo workflows (HTTP handoffs do not need them).
+# This Developer
 # Preview flag grants workflow authors/runners code execution on AO workers,
 # including access to worker environment variables. Opt in only on a trusted
 # demo instance after its administrator approves that instance-wide capability.

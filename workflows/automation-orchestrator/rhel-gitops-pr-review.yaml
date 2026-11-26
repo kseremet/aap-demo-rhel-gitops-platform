@@ -10,15 +10,15 @@ triggers:
     authorized_service_account_ids: []
 nodes:
 - id: handoff_scope_request
-  type: script
+  type: http_request
   name: 'Prepare compact input: Understand the request and repository revision'
   parameters:
-    language: python
-    code: __AO_PREPARE_PROMPT_CODE__
-    environment:
-      HANDOFF_STAGE: scope_request
-      HANDOFF_COUNT: '1'
-      PROMPT_TEMPLATE: |
+    method: POST
+    url: __AO_HANDOFF_PREPARE_URL__
+    headers:
+      Content-Type: application/json
+    body:
+      template: |
         Act as a RHEL GitOps incident investigator. Explain causal links using attributed
         facts; distinguish measurements, policy, hypotheses, and future validation.
         Use selected read-only MCP tools, one call at a time; maximum four calls including
@@ -48,10 +48,11 @@ nodes:
         Use concise handoffs: avoid duplicated narrative and full-file quotations. Preserve
         all blockers and cite the shortest exact excerpt supporting each observation;
         the full runtime results remain available to the independent AAP validator.
-      HANDOFF_0: ${trigger}
+      contexts:
+      - ${trigger}
+      stage: scope_request
   outputs:
-    prompt: ${result.stdout_json.prompt}
-    characters: ${result.stdout_json.characters}
+    result: ${result}
   settings:
     timeout: 30
     continue_on_failure: false
@@ -130,22 +131,22 @@ nodes:
       - requirements
       - needs_revision
       - unanswered_questions
-    prompt: ${handoff_scope_request.prompt}
+    prompt: ${handoff_scope_request.result.body.prompt}
     tool_selections:
     - __AO_GITHUB_TOOL_IDS__
   settings:
     timeout: 1200
     continue_on_failure: false
 - id: handoff_investigate_host
-  type: script
+  type: http_request
   name: 'Prepare compact input: Collect targeted host evidence'
   parameters:
-    language: python
-    code: __AO_PREPARE_PROMPT_CODE__
-    environment:
-      HANDOFF_STAGE: investigate_host
-      HANDOFF_COUNT: '2'
-      PROMPT_TEMPLATE: |
+    method: POST
+    url: __AO_HANDOFF_PREPARE_URL__
+    headers:
+      Content-Type: application/json
+    body:
+      template: |
         Act as a RHEL GitOps incident investigator. Explain causal links using attributed
         facts; distinguish measurements, policy, hypotheses, and future validation.
         Use selected read-only MCP tools, one call at a time; maximum four calls including
@@ -181,11 +182,12 @@ nodes:
         Use concise handoffs: avoid duplicated narrative and full-file quotations. Preserve
         all blockers and cite the shortest exact excerpt supporting each observation;
         the full runtime results remain available to the independent AAP validator.
-      HANDOFF_0: ${scope_request.result.content}
-      HANDOFF_1: ${trigger}
+      contexts:
+      - ${scope_request.result.content}
+      - ${trigger}
+      stage: investigate_host
   outputs:
-    prompt: ${result.stdout_json.prompt}
-    characters: ${result.stdout_json.characters}
+    result: ${result}
   settings:
     timeout: 30
     continue_on_failure: false
@@ -200,6 +202,8 @@ nodes:
     integration_connections:
     - integration_id: __AO_MCP_INTEGRATION_ID__
       credential_id: __AO_MCP_CREDENTIAL_ID__
+    - integration_id: __AO_GITHUB_MCP_INTEGRATION_ID__
+      credential_id: __AO_GITHUB_MCP_CREDENTIAL_ID__
     response_schema:
       type: object
       additionalProperties: false
@@ -238,22 +242,22 @@ nodes:
       - summary
       - evidence
       - unanswered_questions
-    prompt: ${handoff_investigate_host.prompt}
+    prompt: ${handoff_investigate_host.result.body.prompt}
     tool_selections:
     - __AO_LINUX_TOOL_IDS__
   settings:
     timeout: 1200
     continue_on_failure: false
 - id: handoff_map_repository
-  type: script
+  type: http_request
   name: 'Prepare compact input: Trace declared state and reconciliation'
   parameters:
-    language: python
-    code: __AO_PREPARE_PROMPT_CODE__
-    environment:
-      HANDOFF_STAGE: map_repository
-      HANDOFF_COUNT: '2'
-      PROMPT_TEMPLATE: |
+    method: POST
+    url: __AO_HANDOFF_PREPARE_URL__
+    headers:
+      Content-Type: application/json
+    body:
+      template: |
         Act as a RHEL GitOps incident investigator. Explain causal links using attributed
         facts; distinguish measurements, policy, hypotheses, and future validation.
         Use selected read-only MCP tools, one call at a time; maximum four calls including
@@ -291,11 +295,12 @@ nodes:
         Use concise handoffs: avoid duplicated narrative and full-file quotations. Preserve
         all blockers and cite the shortest exact excerpt supporting each observation;
         the full runtime results remain available to the independent AAP validator.
-      HANDOFF_0: ${scope_request.result.content}
-      HANDOFF_1: ${investigate_host.result.content}
+      contexts:
+      - ${scope_request.result.content}
+      - ${investigate_host.result.content}
+      stage: map_repository
   outputs:
-    prompt: ${result.stdout_json.prompt}
-    characters: ${result.stdout_json.characters}
+    result: ${result}
   settings:
     timeout: 30
     continue_on_failure: false
@@ -348,22 +353,22 @@ nodes:
       - summary
       - evidence
       - unanswered_questions
-    prompt: ${handoff_map_repository.prompt}
+    prompt: ${handoff_map_repository.result.body.prompt}
     tool_selections:
     - __AO_GITHUB_TOOL_IDS__
   settings:
     timeout: 1200
     continue_on_failure: false
 - id: handoff_analyze_case
-  type: script
+  type: http_request
   name: 'Prepare compact input: Analyze cause, alternatives, and remediation scope'
   parameters:
-    language: python
-    code: __AO_PREPARE_PROMPT_CODE__
-    environment:
-      HANDOFF_STAGE: analyze_case
-      HANDOFF_COUNT: '3'
-      PROMPT_TEMPLATE: |
+    method: POST
+    url: __AO_HANDOFF_PREPARE_URL__
+    headers:
+      Content-Type: application/json
+    body:
+      template: |
         Act as a RHEL GitOps incident investigator. Explain causal links using attributed
         facts; distinguish measurements, policy, hypotheses, and future validation.
         Use selected read-only MCP tools, one call at a time; maximum four calls including
@@ -406,12 +411,13 @@ nodes:
         Use concise handoffs: avoid duplicated narrative and full-file quotations. Preserve
         all blockers and cite the shortest exact excerpt supporting each observation;
         the full runtime results remain available to the independent AAP validator.
-      HANDOFF_0: ${scope_request.result.content}
-      HANDOFF_1: ${investigate_host.result.content}
-      HANDOFF_2: ${map_repository.result.content}
+      contexts:
+      - ${scope_request.result.content}
+      - ${investigate_host.result.content}
+      - ${map_repository.result.content}
+      stage: analyze_case
   outputs:
-    prompt: ${result.stdout_json.prompt}
-    characters: ${result.stdout_json.characters}
+    result: ${result}
   settings:
     timeout: 30
     continue_on_failure: false
@@ -551,22 +557,22 @@ nodes:
       - alternatives
       - validation_plan
       - limitations
-    prompt: ${handoff_analyze_case.prompt}
+    prompt: ${handoff_analyze_case.result.body.prompt}
     tool_selections:
     - __AO_READONLY_TOOL_IDS__
   settings:
     timeout: 1200
     continue_on_failure: false
 - id: handoff_review_evidence
-  type: script
+  type: http_request
   name: 'Prepare compact input: Challenge the diagnosis and identify missing evidence'
   parameters:
-    language: python
-    code: __AO_PREPARE_PROMPT_CODE__
-    environment:
-      HANDOFF_STAGE: review_evidence
-      HANDOFF_COUNT: '2'
-      PROMPT_TEMPLATE: |
+    method: POST
+    url: __AO_HANDOFF_PREPARE_URL__
+    headers:
+      Content-Type: application/json
+    body:
+      template: |
         Act as a RHEL GitOps incident investigator. Explain causal links using attributed
         facts; distinguish measurements, policy, hypotheses, and future validation.
         Use selected read-only MCP tools, one call at a time; maximum four calls including
@@ -608,11 +614,12 @@ nodes:
         Check inventory, overlays, or other retrievable evidence instead of leaving these
         as unexplored blockers with follow_up=[]. Unobtainable gaps remain blocking even
         when no follow-up can resolve them.
-      HANDOFF_0: ${analyze_case.result.content}
-      HANDOFF_1: ${scope_request.result.content}
+      contexts:
+      - ${analyze_case.result.content}
+      - ${scope_request.result.content}
+      stage: review_evidence
   outputs:
-    prompt: ${result.stdout_json.prompt}
-    characters: ${result.stdout_json.characters}
+    result: ${result}
   settings:
     timeout: 30
     continue_on_failure: false
@@ -660,7 +667,7 @@ nodes:
       - summary
       - blocking_findings
       - follow_up
-    prompt: ${handoff_review_evidence.prompt}
+    prompt: ${handoff_review_evidence.result.body.prompt}
     tool_selections:
     - __AO_READONLY_TOOL_IDS__
   settings:
@@ -681,15 +688,15 @@ nodes:
   settings:
     continue_on_failure: false
 - id: handoff_follow_up_check
-  type: script
+  type: http_request
   name: 'Prepare compact input: Resolve one concrete evidence gap'
   parameters:
-    language: python
-    code: __AO_PREPARE_PROMPT_CODE__
-    environment:
-      HANDOFF_STAGE: follow_up_check
-      HANDOFF_COUNT: '4'
-      PROMPT_TEMPLATE: |
+    method: POST
+    url: __AO_HANDOFF_PREPARE_URL__
+    headers:
+      Content-Type: application/json
+    body:
+      template: |
         Act as a RHEL GitOps incident investigator. Explain causal links using attributed
         facts; distinguish measurements, policy, hypotheses, and future validation.
         Use selected read-only MCP tools, one call at a time; maximum four calls including
@@ -727,13 +734,14 @@ nodes:
         Use concise handoffs: avoid duplicated narrative and full-file quotations. Preserve
         all blockers and cite the shortest exact excerpt supporting each observation;
         the full runtime results remain available to the independent AAP validator.
-      HANDOFF_0: ${evidence_loop.iteration_count}
-      HANDOFF_1: ${review_evidence.result.content.follow_up}
-      HANDOFF_2: ${analyze_case.result.content}
-      HANDOFF_3: ${scope_request.result.content}
+      contexts:
+      - ${evidence_loop.iteration_count}
+      - ${review_evidence.result.content.follow_up}
+      - ${analyze_case.result.content}
+      - ${scope_request.result.content}
+      stage: follow_up_check
   outputs:
-    prompt: ${result.stdout_json.prompt}
-    characters: ${result.stdout_json.characters}
+    result: ${result}
   settings:
     timeout: 30
     continue_on_failure: false
@@ -788,22 +796,22 @@ nodes:
       - summary
       - evidence
       - unanswered_questions
-    prompt: ${handoff_follow_up_check.prompt}
+    prompt: ${handoff_follow_up_check.result.body.prompt}
     tool_selections:
     - __AO_READONLY_TOOL_IDS__
   settings:
     timeout: 1200
     continue_on_failure: false
 - id: handoff_final_assessment
-  type: script
+  type: http_request
   name: 'Prepare compact input: Resolve review findings and produce the complete incident report'
   parameters:
-    language: python
-    code: __AO_PREPARE_PROMPT_CODE__
-    environment:
-      HANDOFF_STAGE: final_assessment
-      HANDOFF_COUNT: '4'
-      PROMPT_TEMPLATE: |
+    method: POST
+    url: __AO_HANDOFF_PREPARE_URL__
+    headers:
+      Content-Type: application/json
+    body:
+      template: |
         Assess the case independently using the configured response schema. Compare
         runtime, effective declared state, justified policy, precedence, consuming role,
         and affected hosts. Runtime alone is not policy; distinguish measured facts,
@@ -834,13 +842,14 @@ nodes:
         ellipses or invented values. Scalars must be complete; unchanged JSON fields
         are valid excerpts. Use actual callable names without functions. prefixes.
         Failed calls and agent narrative are not evidence. Use the configured response schema.
-      HANDOFF_0: ${analyze_case.result.content}
-      HANDOFF_1: ${review_evidence.result.content}
-      HANDOFF_2: ${evidence_loop.iteration_results}
-      HANDOFF_3: ${scope_request.result.content}
+      contexts:
+      - ${analyze_case.result.content}
+      - ${review_evidence.result.content}
+      - ${evidence_loop.iteration_results}
+      - ${scope_request.result.content}
+      stage: final_assessment
   outputs:
-    prompt: ${result.stdout_json.prompt}
-    characters: ${result.stdout_json.characters}
+    result: ${result}
   settings:
     timeout: 30
     continue_on_failure: false
@@ -1002,7 +1011,7 @@ nodes:
       - limitations
       - blocking_findings
       - resolved_findings
-    prompt: ${handoff_final_assessment.prompt}
+    prompt: ${handoff_final_assessment.result.body.prompt}
     tool_selections:
     - __AO_READONLY_TOOL_IDS__
   settings:
@@ -1053,15 +1062,15 @@ nodes:
         isEmpty
     default_port: blocked
 - id: handoff_prepare_plan
-  type: script
+  type: http_request
   name: 'Prepare compact input: Prepare complete and precisely enumerated variable edits'
   parameters:
-    language: python
-    code: __AO_PREPARE_PROMPT_CODE__
-    environment:
-      HANDOFF_STAGE: prepare_plan
-      HANDOFF_COUNT: '2'
-      PROMPT_TEMPLATE: |-
+    method: POST
+    url: __AO_HANDOFF_PREPARE_URL__
+    headers:
+      Content-Type: application/json
+    body:
+      template: |-
         Act as a RHEL GitOps incident investigator. Explain causal links using attributed
         facts; distinguish measurements, policy, hypotheses, and future validation.
         Use selected read-only MCP tools, one call at a time; maximum four calls including
@@ -1097,11 +1106,12 @@ nodes:
         per-file justification and evidence IDs, and every exact before/after leaf change.
         Make this answer self-contained: later steps do not receive your tool transcript.
         Keep unknowns explicit and use the configured response schema.
-      HANDOFF_0: ${final_assessment.result.content}
-      HANDOFF_1: ${trigger}
+      contexts:
+      - ${final_assessment.result.content}
+      - ${trigger}
+      stage: prepare_plan
   outputs:
-    prompt: ${result.stdout_json.prompt}
-    characters: ${result.stdout_json.characters}
+    result: ${result}
   settings:
     timeout: 30
     continue_on_failure: false
@@ -1202,22 +1212,22 @@ nodes:
       - pr_title
       - commit_message
       - files
-    prompt: ${handoff_prepare_plan.prompt}
+    prompt: ${handoff_prepare_plan.result.body.prompt}
     tool_selections:
     - __AO_GITHUB_TOOL_IDS__
   settings:
     timeout: 1200
     continue_on_failure: false
 - id: handoff_review_plan
-  type: script
+  type: http_request
   name: 'Prepare compact input: Independently review the exact edits before publication'
   parameters:
-    language: python
-    code: __AO_PREPARE_PROMPT_CODE__
-    environment:
-      HANDOFF_STAGE: review_plan
-      HANDOFF_COUNT: '3'
-      PROMPT_TEMPLATE: |-
+    method: POST
+    url: __AO_HANDOFF_PREPARE_URL__
+    headers:
+      Content-Type: application/json
+    body:
+      template: |-
         Act as a RHEL GitOps incident investigator. Explain causal links using attributed
         facts; distinguish measurements, policy, hypotheses, and future validation.
         Use selected read-only MCP tools, one call at a time; maximum four calls including
@@ -1251,12 +1261,13 @@ nodes:
         no unresolved blockers.
         Make this answer self-contained: later steps do not receive your tool transcript.
         Keep unknowns explicit and use the configured response schema.
-      HANDOFF_0: ${prepare_plan.result.content}
-      HANDOFF_1: ${final_assessment.result.content}
-      HANDOFF_2: ${scope_request.result.content}
+      contexts:
+      - ${prepare_plan.result.content}
+      - ${final_assessment.result.content}
+      - ${scope_request.result.content}
+      stage: review_plan
   outputs:
-    prompt: ${result.stdout_json.prompt}
-    characters: ${result.stdout_json.characters}
+    result: ${result}
   settings:
     timeout: 30
     continue_on_failure: false
@@ -1292,7 +1303,7 @@ nodes:
       - summary
       - blocking_findings
       - reviewed_paths
-    prompt: ${handoff_review_plan.prompt}
+    prompt: ${handoff_review_plan.result.body.prompt}
     tool_selections:
     - __AO_GITHUB_TOOL_IDS__
   settings:
@@ -1329,15 +1340,15 @@ nodes:
     retry_policy:
       max_retries: 0
 - id: handoff_report_no_change
-  type: script
+  type: http_request
   name: 'Prepare compact input: Explain why this run made no repository change'
   parameters:
-    language: python
-    code: __AO_PREPARE_PROMPT_CODE__
-    environment:
-      HANDOFF_STAGE: report_no_change
-      HANDOFF_COUNT: '1'
-      PROMPT_TEMPLATE: |-
+    method: POST
+    url: __AO_HANDOFF_PREPARE_URL__
+    headers:
+      Content-Type: application/json
+    body:
+      template: |-
         Act as a RHEL GitOps incident investigator. Explain causal links using attributed
         facts; distinguish measurements, policy, hypotheses, and future validation.
         Use selected read-only MCP tools, one call at a time; maximum four calls including
@@ -1362,10 +1373,11 @@ nodes:
         copy the complete trimmed value. Use tool names without the functions. prefix.
         For a JSON result, a JSON object containing only unchanged returned fields is
         also accepted; do not invent keys or values. Leave evidence empty when no successful results support a claim.
-      HANDOFF_0: ${final_assessment.result.content}
+      contexts:
+      - ${final_assessment.result.content}
+      stage: report_no_change
   outputs:
-    prompt: ${result.stdout_json.prompt}
-    characters: ${result.stdout_json.characters}
+    result: ${result}
   settings:
     timeout: 30
     continue_on_failure: false
@@ -1376,7 +1388,7 @@ nodes:
     agent: production://report-no-change
     llm_model_id: __AO_LLM_MODEL_ID__
     credential_id: __AO_LLM_CREDENTIAL_ID__
-    tool_selection_strategy: NONE
+    tool_selection_strategy: SELECTED
     response_schema:
       type: object
       additionalProperties: false
@@ -1422,20 +1434,25 @@ nodes:
       - summary
       - evidence
       - next_steps
-    prompt: ${handoff_report_no_change.prompt}
+    prompt: ${handoff_report_no_change.result.body.prompt}
+    tool_selections:
+    - __AO_HANDOFF_TOOL_IDS__
+    integration_connections:
+    - integration_id: __AO_GITHUB_MCP_INTEGRATION_ID__
+      credential_id: __AO_GITHUB_MCP_CREDENTIAL_ID__
   settings:
     timeout: 1200
     continue_on_failure: false
 - id: handoff_report_blocked
-  type: script
+  type: http_request
   name: 'Prepare compact input: Report missing evidence or unresolved contradictions'
   parameters:
-    language: python
-    code: __AO_PREPARE_PROMPT_CODE__
-    environment:
-      HANDOFF_STAGE: report_blocked
-      HANDOFF_COUNT: '2'
-      PROMPT_TEMPLATE: |-
+    method: POST
+    url: __AO_HANDOFF_PREPARE_URL__
+    headers:
+      Content-Type: application/json
+    body:
+      template: |-
         Act as a RHEL GitOps incident investigator. Explain causal links using attributed
         facts; distinguish measurements, policy, hypotheses, and future validation.
         Use selected read-only MCP tools, one call at a time; maximum four calls including
@@ -1463,11 +1480,12 @@ nodes:
         Deterministic evidence validation:
         @@HANDOFF_1@@
         Always report outcome=blocked. Failed checks or absent evidence never justify no_change.
-      HANDOFF_0: ${final_assessment.result.content}
-      HANDOFF_1: ${validate_evidence.artifacts.ao_evidence_validation}
+      contexts:
+      - ${final_assessment.result.content}
+      - ${validate_evidence.artifacts.ao_evidence_validation}
+      stage: report_blocked
   outputs:
-    prompt: ${result.stdout_json.prompt}
-    characters: ${result.stdout_json.characters}
+    result: ${result}
   settings:
     timeout: 30
     continue_on_failure: false
@@ -1478,7 +1496,7 @@ nodes:
     agent: production://report-no-change
     llm_model_id: __AO_LLM_MODEL_ID__
     credential_id: __AO_LLM_CREDENTIAL_ID__
-    tool_selection_strategy: NONE
+    tool_selection_strategy: SELECTED
     response_schema:
       type: object
       additionalProperties: false
@@ -1524,20 +1542,25 @@ nodes:
       - summary
       - evidence
       - next_steps
-    prompt: ${handoff_report_blocked.prompt}
+    prompt: ${handoff_report_blocked.result.body.prompt}
+    tool_selections:
+    - __AO_HANDOFF_TOOL_IDS__
+    integration_connections:
+    - integration_id: __AO_GITHUB_MCP_INTEGRATION_ID__
+      credential_id: __AO_GITHUB_MCP_CREDENTIAL_ID__
   settings:
     timeout: 1200
     continue_on_failure: false
 - id: handoff_report_rejected_plan
-  type: script
+  type: http_request
   name: 'Prepare compact input: Explain why the proposal failed independent review'
   parameters:
-    language: python
-    code: __AO_PREPARE_PROMPT_CODE__
-    environment:
-      HANDOFF_STAGE: report_rejected_plan
-      HANDOFF_COUNT: '2'
-      PROMPT_TEMPLATE: |-
+    method: POST
+    url: __AO_HANDOFF_PREPARE_URL__
+    headers:
+      Content-Type: application/json
+    body:
+      template: |-
         Act as a RHEL GitOps incident investigator. Explain causal links using attributed
         facts; distinguish measurements, policy, hypotheses, and future validation.
         Use selected read-only MCP tools, one call at a time; maximum four calls including
@@ -1563,11 +1586,12 @@ nodes:
         copy the complete trimmed value. Use tool names without the functions. prefix.
         For a JSON result, a JSON object containing only unchanged returned fields is
         also accepted; do not invent keys or values. Leave evidence empty when no successful results support a claim.
-      HANDOFF_0: ${review_plan.result.content}
-      HANDOFF_1: ${final_assessment.result.content}
+      contexts:
+      - ${review_plan.result.content}
+      - ${final_assessment.result.content}
+      stage: report_rejected_plan
   outputs:
-    prompt: ${result.stdout_json.prompt}
-    characters: ${result.stdout_json.characters}
+    result: ${result}
   settings:
     timeout: 30
     continue_on_failure: false
@@ -1578,7 +1602,7 @@ nodes:
     agent: production://report-rejected-plan
     llm_model_id: __AO_LLM_MODEL_ID__
     credential_id: __AO_LLM_CREDENTIAL_ID__
-    tool_selection_strategy: NONE
+    tool_selection_strategy: SELECTED
     response_schema:
       type: object
       additionalProperties: false
@@ -1624,20 +1648,25 @@ nodes:
       - summary
       - evidence
       - next_steps
-    prompt: ${handoff_report_rejected_plan.prompt}
+    prompt: ${handoff_report_rejected_plan.result.body.prompt}
+    tool_selections:
+    - __AO_HANDOFF_TOOL_IDS__
+    integration_connections:
+    - integration_id: __AO_GITHUB_MCP_INTEGRATION_ID__
+      credential_id: __AO_GITHUB_MCP_CREDENTIAL_ID__
   settings:
     timeout: 1200
     continue_on_failure: false
 - id: handoff_report_invalid_budget
-  type: script
+  type: http_request
   name: 'Prepare compact input: Report an oversized diagnostic request'
   parameters:
-    language: python
-    code: __AO_PREPARE_PROMPT_CODE__
-    environment:
-      HANDOFF_STAGE: report_invalid_budget
-      HANDOFF_COUNT: '2'
-      PROMPT_TEMPLATE: |-
+    method: POST
+    url: __AO_HANDOFF_PREPARE_URL__
+    headers:
+      Content-Type: application/json
+    body:
+      template: |-
         Act as a RHEL GitOps incident investigator. Explain causal links using attributed
         facts; distinguish measurements, policy, hypotheses, and future validation.
         Use selected read-only MCP tools, one call at a time; maximum four calls including
@@ -1661,11 +1690,12 @@ nodes:
         copy the complete trimmed value. Use tool names without the functions. prefix.
         For a JSON result, a JSON object containing only unchanged returned fields is
         also accepted; do not invent keys or values. Leave evidence empty when no successful results support a claim.
-      HANDOFF_0: ${review_evidence.result.content}
-      HANDOFF_1: ${analyze_case.result.content}
+      contexts:
+      - ${review_evidence.result.content}
+      - ${analyze_case.result.content}
+      stage: report_invalid_budget
   outputs:
-    prompt: ${result.stdout_json.prompt}
-    characters: ${result.stdout_json.characters}
+    result: ${result}
   settings:
     timeout: 30
     continue_on_failure: false
@@ -1676,7 +1706,7 @@ nodes:
     agent: production://report-invalid-budget
     llm_model_id: __AO_LLM_MODEL_ID__
     credential_id: __AO_LLM_CREDENTIAL_ID__
-    tool_selection_strategy: NONE
+    tool_selection_strategy: SELECTED
     response_schema:
       type: object
       additionalProperties: false
@@ -1722,7 +1752,12 @@ nodes:
       - summary
       - evidence
       - next_steps
-    prompt: ${handoff_report_invalid_budget.prompt}
+    prompt: ${handoff_report_invalid_budget.result.body.prompt}
+    tool_selections:
+    - __AO_HANDOFF_TOOL_IDS__
+    integration_connections:
+    - integration_id: __AO_GITHUB_MCP_INTEGRATION_ID__
+      credential_id: __AO_GITHUB_MCP_CREDENTIAL_ID__
   settings:
     timeout: 1200
     continue_on_failure: false
@@ -1732,22 +1767,23 @@ nodes:
   parameters:
     condition: ${scope_request.result.tools_used[0]} exists
 - id: handoff_report_scope_request_tools
-  type: script
+  type: http_request
   name: 'Prepare compact input: Report missing tool execution in scope_request'
   parameters:
-    language: python
-    code: __AO_PREPARE_PROMPT_CODE__
-    environment:
-      HANDOFF_STAGE: report_scope_request_tools
-      HANDOFF_COUNT: '1'
-      PROMPT_TEMPLATE: |-
+    method: POST
+    url: __AO_HANDOFF_PREPARE_URL__
+    headers:
+      Content-Type: application/json
+    body:
+      template: |-
         Report that scope_request did not execute diagnostic tools. The investigation is blocked; do not invent evidence or report no_change. Runtime output:
         @@HANDOFF_0@@
         Final handoff: Return outcome=blocked, an explanation, no invented evidence, and the missing tool execution as an unanswered question. Use the configured response schema.
-      HANDOFF_0: ${scope_request.result.content}
+      contexts:
+      - ${scope_request.result.content}
+      stage: report_scope_request_tools
   outputs:
-    prompt: ${result.stdout_json.prompt}
-    characters: ${result.stdout_json.characters}
+    result: ${result}
   settings:
     timeout: 30
     continue_on_failure: false
@@ -1758,7 +1794,7 @@ nodes:
     agent: production://report-invalid-budget
     llm_model_id: __AO_LLM_MODEL_ID__
     credential_id: __AO_LLM_CREDENTIAL_ID__
-    tool_selection_strategy: NONE
+    tool_selection_strategy: SELECTED
     response_schema:
       type: object
       additionalProperties: false
@@ -1804,7 +1840,12 @@ nodes:
       - summary
       - evidence
       - next_steps
-    prompt: ${handoff_report_scope_request_tools.prompt}
+    prompt: ${handoff_report_scope_request_tools.result.body.prompt}
+    tool_selections:
+    - __AO_HANDOFF_TOOL_IDS__
+    integration_connections:
+    - integration_id: __AO_GITHUB_MCP_INTEGRATION_ID__
+      credential_id: __AO_GITHUB_MCP_CREDENTIAL_ID__
   settings:
     timeout: 1200
     continue_on_failure: false
@@ -1814,22 +1855,23 @@ nodes:
   parameters:
     condition: ${investigate_host.result.tools_used[0]} exists
 - id: handoff_report_investigate_host_tools
-  type: script
+  type: http_request
   name: 'Prepare compact input: Report missing tool execution in investigate_host'
   parameters:
-    language: python
-    code: __AO_PREPARE_PROMPT_CODE__
-    environment:
-      HANDOFF_STAGE: report_investigate_host_tools
-      HANDOFF_COUNT: '1'
-      PROMPT_TEMPLATE: |-
+    method: POST
+    url: __AO_HANDOFF_PREPARE_URL__
+    headers:
+      Content-Type: application/json
+    body:
+      template: |-
         Report that investigate_host did not execute diagnostic tools. The investigation is blocked; do not invent evidence or report no_change. Runtime output:
         @@HANDOFF_0@@
         Final handoff: Return outcome=blocked, an explanation, no invented evidence, and the missing tool execution as an unanswered question. Use the configured response schema.
-      HANDOFF_0: ${investigate_host.result.content}
+      contexts:
+      - ${investigate_host.result.content}
+      stage: report_investigate_host_tools
   outputs:
-    prompt: ${result.stdout_json.prompt}
-    characters: ${result.stdout_json.characters}
+    result: ${result}
   settings:
     timeout: 30
     continue_on_failure: false
@@ -1840,7 +1882,7 @@ nodes:
     agent: production://report-invalid-budget
     llm_model_id: __AO_LLM_MODEL_ID__
     credential_id: __AO_LLM_CREDENTIAL_ID__
-    tool_selection_strategy: NONE
+    tool_selection_strategy: SELECTED
     response_schema:
       type: object
       additionalProperties: false
@@ -1886,7 +1928,12 @@ nodes:
       - summary
       - evidence
       - next_steps
-    prompt: ${handoff_report_investigate_host_tools.prompt}
+    prompt: ${handoff_report_investigate_host_tools.result.body.prompt}
+    tool_selections:
+    - __AO_HANDOFF_TOOL_IDS__
+    integration_connections:
+    - integration_id: __AO_GITHUB_MCP_INTEGRATION_ID__
+      credential_id: __AO_GITHUB_MCP_CREDENTIAL_ID__
   settings:
     timeout: 1200
     continue_on_failure: false
@@ -1896,22 +1943,23 @@ nodes:
   parameters:
     condition: ${map_repository.result.tools_used[0]} exists
 - id: handoff_report_map_repository_tools
-  type: script
+  type: http_request
   name: 'Prepare compact input: Report missing tool execution in map_repository'
   parameters:
-    language: python
-    code: __AO_PREPARE_PROMPT_CODE__
-    environment:
-      HANDOFF_STAGE: report_map_repository_tools
-      HANDOFF_COUNT: '1'
-      PROMPT_TEMPLATE: |-
+    method: POST
+    url: __AO_HANDOFF_PREPARE_URL__
+    headers:
+      Content-Type: application/json
+    body:
+      template: |-
         Report that map_repository did not execute diagnostic tools. The investigation is blocked; do not invent evidence or report no_change. Runtime output:
         @@HANDOFF_0@@
         Final handoff: Return outcome=blocked, an explanation, no invented evidence, and the missing tool execution as an unanswered question. Use the configured response schema.
-      HANDOFF_0: ${map_repository.result.content}
+      contexts:
+      - ${map_repository.result.content}
+      stage: report_map_repository_tools
   outputs:
-    prompt: ${result.stdout_json.prompt}
-    characters: ${result.stdout_json.characters}
+    result: ${result}
   settings:
     timeout: 30
     continue_on_failure: false
@@ -1922,7 +1970,7 @@ nodes:
     agent: production://report-invalid-budget
     llm_model_id: __AO_LLM_MODEL_ID__
     credential_id: __AO_LLM_CREDENTIAL_ID__
-    tool_selection_strategy: NONE
+    tool_selection_strategy: SELECTED
     response_schema:
       type: object
       additionalProperties: false
@@ -1968,7 +2016,12 @@ nodes:
       - summary
       - evidence
       - next_steps
-    prompt: ${handoff_report_map_repository_tools.prompt}
+    prompt: ${handoff_report_map_repository_tools.result.body.prompt}
+    tool_selections:
+    - __AO_HANDOFF_TOOL_IDS__
+    integration_connections:
+    - integration_id: __AO_GITHUB_MCP_INTEGRATION_ID__
+      credential_id: __AO_GITHUB_MCP_CREDENTIAL_ID__
   settings:
     timeout: 1200
     continue_on_failure: false

@@ -228,16 +228,15 @@ The CasC playbook checks for the existing `GitHub AI Incident Issues`
 activation and disables it before applying updates. This handles EDA's
 requirement that stopped activations be disabled before they can be updated.
 
-## AO script-node prerequisite
+## AO handoff preparation access
 
-The harness uses deterministic Python script nodes to prepare compact handoffs
-within AO's 10,000-character invocation API limit. Script execution is disabled
-by default and is a Developer Preview capability with instance-wide worker code
-execution implications. After the AO administrator explicitly approves it, use
-the opt-in configuration and rollback procedure in
-[the harness guide](ao-harness.md#enable-script-nodes-on-the-trusted-demo-instance).
-Combined CasC manages the approved flag through AO's existing admin ConfigMap;
-it does not modify AO source or images.
+The harness uses native HTTP requests to the existing MCP adapter for bounded
+JSON preparation, with MCP retrieval for oversized context packets. Combined
+CasC preserves the AO operator's existing HTTP allowlist and adds only the
+adapter hostname. It waits for the operator-managed worker rollout. Configure
+`demo_ao_namespace` and `demo_ao_resource_name` if their defaults differ.
+Script nodes are no longer required; the earlier approved setting can be disabled
+using the [optional configuration procedure](ao-harness.md#optional-script-node-configuration).
 
 ## GitHub MCP compatibility on the existing AO version
 

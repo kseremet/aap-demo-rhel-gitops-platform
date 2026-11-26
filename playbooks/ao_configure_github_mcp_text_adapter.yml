@@ -53,6 +53,8 @@
   ansible.builtin.assert:
     that:
       - _ao_github_text_deployment.resources | length == 1
+      # Handoff packets are process-local; this demo endpoint must have one replica.
+      - _ao_github_text_deployment.resources[0].spec.replicas | default(1) | int == 1
       - _ao_github_text_service.resources | length == 1
       - >-
         _ao_github_text_deployment.resources[0].spec.template.spec.containers | selectattr('name', 'equalto',
@@ -162,6 +164,8 @@
           app.kubernetes.io/component: github-mcp-text-adapter
       data:
         adapter.py: "{{ lookup('ansible.builtin.file', ao_github_text_source_file, rstrip=false) }}"
+        prepare_agent_prompt.py: "{{ lookup('ansible.builtin.file', ao_github_text_source_file | dirname ~ '/prepare_agent_prompt.py', rstrip=false) }}"
+        handoff_packets.py: "{{ lookup('ansible.builtin.file', ao_github_text_source_file | dirname ~ '/handoff_packets.py', rstrip=false) }}"
 
 - name: Add the compatibility sidecar while preserving GitHub MCP configuration
   tags: [ao, github_adapter]

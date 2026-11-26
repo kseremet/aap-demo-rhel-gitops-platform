@@ -22,14 +22,15 @@ AO GitHub integration
 ```
 
 The original Service port remains available. The adapter uses the same hostname
-already allowed by AO, so no AO source, image, operator, or allowlist change is
-needed. Its management/execution credential is the existing GitHub credential.
+already allowed by AO's MCP integration policy, so no AO source or image
+change is needed for MCP. Native HTTP preparation uses a separate workflow HTTP
+allowlist: CasC adds this same precise hostname through the AO operator resource. Its management/execution credential is the existing GitHub credential.
 The incoming bearer header goes only to the fixed local GitHub MCP upstream;
 the adapter stores no credential and logs no headers or request bodies. Linux
 MCP continues to use its separate dummy UI bearer credential.
 
-Only `get_commit`, `get_file_contents`, `pull_request_read`, `search_code`, and
-`list_commits` are exposed. The AAP writer still performs all publication. The
+The five GitHub tools `get_commit`, `get_file_contents`, `pull_request_read`,
+`search_code`, and `list_commits` are exposed, together with local `read_handoff`. The AAP writer still performs all publication. The
 adapter supports the upstream's stateless Streamable HTTP requests, accepting
 JSON or SSE results and returning JSON. Server push and unrelated MCP methods
 are intentionally unavailable. Requests are capped at 1 MiB and responses at
@@ -91,7 +92,7 @@ oc get service github-mcp-server -n koray
 
 Expect both `github-mcp-server` and `ao-text-adapter` containers ready and Service
 ports `8082` and `8083`. In AO, validate the existing GitHub integration. Its
-five read-only tools should be available. Run the incident workflow with the
+six read-only tools should be available. Run the incident workflow with the
 [mock-event instructions](ao-harness.md#apply-and-live-test) after publishing any new draft.
 Do not pin old agent outputs: they are not fresh runtime evidence.
 
@@ -118,3 +119,26 @@ Cleanup retains the original GitHub MCP Deployment, Service, credentials, and
 original port. The upstream image stays pinned to its current digest. The
 long-term AO source patch remains available for the AO maintainer; installing
 it is not required for this workaround.
+
+## Overflow handoff packets
+
+`POST /prepare-prompt` accepts the fixed instruction template and typed contexts,
+then returns a compact prompt or stores overflow contexts for MCP retrieval.
+`POST /handoffs` accepts compact contexts and returns an opaque,
+random capability ID and SHA-256 digest. The preparation library checks the digest
+and uses `read_handoff(packet_id)` to make the complete contexts available through
+MCP when the initial prompt would exceed AO's 10,000-character limit. This endpoint
+stores JSON only: it executes no content, accepts no destination URL, writes no
+files, and makes no outbound request. No bearer or cluster token is sent on upload.
+MCP retrieval uses the existing integration connection and is handled locally;
+its bearer header and packet contents are never forwarded to GitHub.
+
+The internal upload endpoint is unauthenticated. Anyone holding a packet's opaque
+ID can read it until expiry; treat IDs as transient capabilities. Packets stay in
+process memory, readable for one hour, with a 256 KiB packet cap, 128-packet
+cap, and 8 MiB total payload quota. Expired entries are pruned on store access. Neither contents nor IDs are written to adapter request logs. A restart
+clears all packets; rerun preparation if one becomes unavailable. The demo requires
+a single adapter replica so upload and retrieval use the same memory store. This
+is transient demo context transport, not a persistent artifact store. The existing
+cleanup playbook removes the adapter and its source ConfigMap, including packet
+support. AAP retains the original runtime traces for independent validation.

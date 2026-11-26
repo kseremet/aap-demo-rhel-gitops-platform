@@ -113,20 +113,18 @@ def test_all_agent_paths_are_prepared_and_raw_provenance_stays_on_validator(path
         if node["type"] != "agentic":
             continue
         prep = nodes["handoff_" + node["id"]]
-        assert node["parameters"]["prompt"] == "${" + prep["id"] + ".prompt}"
+        assert (
+            node["parameters"]["prompt"] == "${" + prep["id"] + ".result.body.prompt}"
+        )
         incoming = [e for e in w["edges"] if e["to"] == node["id"]]
         assert len(incoming) == 1 and incoming[0]["from"] == prep["id"]
-        env = prep["parameters"]["environment"]
-        for key, value in env.items():
-            if key.startswith("HANDOFF_") and key not in [
-                "HANDOFF_COUNT",
-                "HANDOFF_STAGE",
-            ]:
-                assert value not in [
-                    "${scope_request}",
-                    "${investigate_host}",
-                    "${map_repository}",
-                ]
+        env = prep["parameters"]["body"]
+        for value in env["contexts"]:
+            assert value not in [
+                "${scope_request}",
+                "${investigate_host}",
+                "${map_repository}",
+            ]
     raw = nodes["validate_evidence"]["parameters"]["extra_vars"]["ao_evidence"]
     assert raw["scope_request"] == "${scope_request}"
     assert raw["investigate_host"] == "${investigate_host}"
@@ -140,7 +138,7 @@ def test_final_handoff_keeps_all_checks_without_loop_input_duplication(path, che
     w = yaml.safe_load(path.read_text())
     env = next(n for n in w["nodes"] if n["id"] == "handoff_final_assessment")[
         "parameters"
-    ]["environment"]
+    ]["body"]
     results = [
         {
             "content": {
@@ -170,7 +168,7 @@ def test_final_handoff_keeps_all_checks_without_loop_input_duplication(path, che
         loop,
         {"target_host": "web-01"},
     ]
-    prompt = prepare(env["PROMPT_TEMPLATE"], contexts, "final_assessment")["prompt"]
+    prompt = prepare(env["template"], contexts, "final_assessment")["prompt"]
     assert len(prompt) <= 10000
     assert "duplicated input" not in prompt and "large transcript" not in prompt
     assert "Verify scope" in prompt
@@ -192,3 +190,43 @@ def test_script_execution_requires_explicit_admin_opt_in():
         (ROOT / "group_vars/all/demo_variables.yml.example").read_text()
     )
     assert example["demo_ao_manage_script_nodes"] is False
+
+
+def test_oversized_case_uses_complete_packet_instead_of_truncation():
+    contexts = [
+        {
+            "evidence": [{"id": "e1", "tool_output_excerpt": "exact evidence " * 1500}],
+            "blocking_findings": ["Must resolve this"],
+        }
+    ]
+    saved = []
+
+    def store(value):
+        import hashlib
+
+        saved.append(value)
+        return {
+            "packet_id": "A" * 43,
+            "sha256": hashlib.sha256(
+                json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode()
+            ).hexdigest(),
+        }
+
+    result = prepare("Review @@HANDOFF_0@@", contexts, "final_assessment", store=store)
+    assert result["characters"] < 10000
+    assert result["context_characters"] > 10000
+    assert result["packet_id"] == "A" * 43
+    assert "read_handoff" in result["prompt"]
+    assert saved == [contexts]
+
+
+def test_script_output_mapping_preserves_original_failure_details():
+    for path in WORKFLOWS:
+        w = yaml.safe_load(path.read_text())
+        for node in w["nodes"]:
+            if node["id"].startswith("handoff_"):
+                assert node["outputs"] == {"result": "${result}"}
+                # Error ScriptOutput has return_code/stdout/stderr, but no
+                # stdout_json. Mapping its whole result cannot mask that error.
+                error = {"return_code": 1, "stdout": "", "stderr": "original failure"}
+                assert "stdout_json" not in error

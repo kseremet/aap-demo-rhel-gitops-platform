@@ -5,6 +5,7 @@ import importlib.util
 import json
 from pathlib import Path
 import threading
+import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
@@ -12,6 +13,7 @@ from urllib.error import HTTPError
 import pytest
 
 SOURCE = Path(__file__).parents[1] / "files/ao/github_mcp_text_adapter.py"
+sys.path.insert(0, str(SOURCE.parent))
 spec = importlib.util.spec_from_file_location("github_mcp_text_adapter", SOURCE)
 adapter = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(adapter)
@@ -168,6 +170,7 @@ def servers():
                 json.loads(body) if body else None,
             )
 
+    Upstream.proxy_url = f"http://127.0.0.1:{proxy.server_port}"
     yield Upstream, call
     for server in (proxy, upstream):
         server.shutdown()
@@ -257,6 +260,7 @@ def test_only_read_tools_and_no_push_capability(servers):
     assert [x["name"] for x in call("tools/list")[2]["result"]["tools"]] == [
         "get_commit",
         "get_file_contents",
+        "read_handoff",
     ]
     upstream.payload = {
         "jsonrpc": "2.0",
@@ -278,3 +282,102 @@ def test_response_size_limit(servers):
         adapter.MAX_RESPONSE_BYTES + 1
     )
     assert call()[0] == 502
+
+
+def test_large_handoff_roundtrip_without_upstream_or_truncation(servers):
+    upstream, call = servers
+    from prepare_agent_prompt import prepare_prompt, upload_contexts
+
+    contexts = [
+        {
+            "evidence": ["complete exact excerpt " * 1000],
+            "blocking_findings": ["unresolved"],
+        }
+    ]
+    result = prepare_prompt(
+        "Review @@HANDOFF_0@@",
+        contexts,
+        "final_assessment",
+        store=lambda values: upload_contexts(upstream.proxy_url + "/handoffs", values),
+    )
+    assert result["context_characters"] > 10000 and result["characters"] < 10000
+    status, _, body = call(
+        params={"name": "read_handoff", "arguments": {"packet_id": result["packet_id"]}}
+    )
+    assert status == 200 and not body["result"].get("isError")
+    loaded = json.loads(body["result"]["content"][0]["text"])
+    assert loaded["contexts"] == contexts
+    assert upstream.calls == []  # bearer and packet are never forwarded to GitHub
+    assert call(params={"name": "read_handoff", "arguments": {"packet_id": "unknown"}})[
+        2
+    ]["result"]["isError"]
+
+
+def test_handoff_store_expiry_and_quota():
+    from handoff_packets import PacketStore
+
+    clock = [0]
+    store = PacketStore(
+        ttl=10, max_bytes=120, max_packet_bytes=100, clock=lambda: clock[0]
+    )
+    packet = store.put(["data" * 12])
+    assert store.get(packet["packet_id"])["contexts"] == ["data" * 12]
+    with pytest.raises(ValueError, match="quota"):
+        store.put(["more" * 20])
+    with pytest.raises(ValueError, match="256 KiB"):
+        store.put(["oversize" * 100])
+    clock[0] = 11
+    with pytest.raises(ValueError, match="expired"):
+        store.get(packet["packet_id"])
+    assert store.put(["new"])["packet_id"] != packet["packet_id"]
+
+
+def test_native_http_preparation_accepts_full_loop_larger_than_script_env(servers):
+    upstream, call = servers
+    from prepare_agent_prompt import compact_handoff
+
+    contexts = [
+        {
+            "follow_up_check.result": [
+                {
+                    "content": {
+                        "evidence": [
+                            {
+                                "id": "e1",
+                                "tool_output_excerpt": "exact evidence " * 1500,
+                            }
+                        ],
+                        "blocking_findings": ["unresolved"],
+                    },
+                    "agent_trace": {"steps": "transcript " * 6000},
+                }
+            ]
+        }
+    ]
+    body = json.dumps(
+        {
+            "template": "Review @@HANDOFF_0@@",
+            "contexts": contexts,
+            "stage": "final_assessment",
+        }
+    ).encode()
+    assert len(body) > 32768
+    request = Request(
+        upstream.proxy_url + "/prepare-prompt",
+        data=body,
+        headers={"Content-Type": "application/json"},
+    )
+    with urlopen(request, timeout=4) as response:
+        assert response.status == 200
+        prepared = json.load(response)
+    assert prepared["characters"] < 10000 and prepared["context_characters"] > 10000
+    loaded = call(
+        params={
+            "name": "read_handoff",
+            "arguments": {"packet_id": prepared["packet_id"]},
+        }
+    )[2]
+    assert json.loads(loaded["result"]["content"][0]["text"])[
+        "contexts"
+    ] == compact_handoff(contexts)
+    assert upstream.calls == []

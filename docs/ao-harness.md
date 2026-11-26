@@ -324,9 +324,9 @@ although the workflow engine itself permits a larger resolved prompt. The
 invocation wrappers expanded that prompt to 74,300 characters. This was separate
 from the earlier embedded-resource checkpoint defect.
 
-Both workflows now prepare every agent's input with a Python script node. The
-importer injects the version-controlled code from
-`files/ao/prepare_agent_prompt.py`. This code serializes handoffs as compact JSON,
+Both workflows now prepare every agent's input with a native HTTP request to
+`/prepare-prompt` on the existing MCP adapter. The fixed server-side code in
+`files/ao/prepare_agent_prompt.py` serializes handoffs as compact JSON,
 unwraps loop result envelopes, and checks the final character count. Review and
 assessment prompts receive structured handoffs rather than duplicated raw tool
 traces. Full collector, reviewer, assessor, and loop outputs still go unchanged
@@ -334,52 +334,53 @@ to the read-only AAP evidence validator; the writer's independent provenance gat
 also remains in place. Response schemas and publication conditions are unchanged.
 
 Preparation does not execute event/repository text, summarize with another model,
-or truncate evidence, file content, or blockers. If the compact prompt still
-exceeds 10,000 characters, it stops before model invocation with the stage name,
-actual size, and limit. Narrow the case or split the handoff if that happens;
-increasing only the workflow engine's limit cannot bypass the API's hard cap.
+or truncate evidence, file content, or blockers. If the compact prompt exceeds
+10,000 characters, preparation puts the complete numbered contexts into the
+existing MCP adapter's bounded, ephemeral handoff store. The agent receives the
+original instructions plus an opaque packet ID and must call `read_handoff` to
+load every context section before reasoning. AO supports larger tool results;
+this keeps the initial invocation inside its separate API limit. One retrieval
+counts toward the existing four-call budget. All model steps can retrieve their
+packet; collectors retain their original diagnostic tools and non-collector
+reporters receive only this context-reading tool.
+
+A packet read transports upstream claims; it is excluded from independently
+verified evidence. Original host/repository traces still establish facts. The
+adapter is required for overflow handling even if the optional AO source patch
+is installed. Oversized static instructions, packet storage errors or packets
+over 256 KiB stop preparation rather than silently removing facts. Output
+mapping retains the complete HTTP result, including failure status/body, rather
+than looking up fields inside an absent script `stdout_json` object.
+
+This also avoids the installed AO script runner's 32 KiB limit per environment
+value: the failed loop supplied about 55 KiB in one value. Native HTTP transports
+that JSON directly without a subprocess environment. CasC adds only the existing
+adapter hostname to `spec.workflowHttpRequestAllowedHosts`, preserving other
+hosts and waiting for the operator-managed worker rollout. No AO source or image
+change is required. The request endpoint runs fixed JSON preparation code and
+does not execute text sent by workflows.
 The isolated review replay completed with an 8,412-character prompt and returned
 two focused follow-up checks. Collector prompts request short exact excerpts while keeping full tool results
-in the original trace. Large file plans or four verbose follow-up results can
-still exceed the installed API limit; this guard fails closed rather than hiding
-evidence to force a publishable result.
+in the original trace. Large file plans and verbose follow-up results use packet retrieval rather than
+being truncated to fit the initial API prompt. Packets are transient: rerun input
+preparation if the adapter restarted or the packet expired.
 
-### Enable script nodes on the trusted demo instance
+### Optional script-node configuration
 
-AO labels script nodes **Developer Preview** and disables them by default.
-Enabling the feature lets every user with workflow-create and execution-run
-permissions execute Python or Bash on AO's Temporal workers, with access to
-worker environment variables. Obtain the instance administrator's explicit
-approval of that capability before enabling it. This demo's preparation code
-only processes JSON/string inputs; the feature setting itself is instance-wide.
+The harness now uses native HTTP preparation and **does not require script
+nodes**. The earlier administrator-approved script setting remains available
+as an explicit opt-in CasC option for other demo use. AO labels it Developer
+Preview: it grants users with workflow-create and execution-run permissions
+Python/Bash execution on workers and access to their environment variables.
 
-The administrator explicitly approved this setting for the current demo AO
-instance after reviewing that impact. Its existing operator-managed worker
-Deployment already references `<AO resource name>-admin-settings` through
-`envFrom`. The configuration tasks set only `APP_SCRIPT_NODES_ENABLED` in that
-ConfigMap and roll the workflow worker using a stable annotation. No source,
-image, operator Deployment, or integration allowlist is changed.
-
-For a similarly approved demo instance, put these values in local demo variables:
+To disable that earlier setting through CasC, use:
 
 ```yaml
 demo_ao_manage_script_nodes: true
-demo_ao_script_nodes_enabled: true
-demo_ao_namespace: automation-orchestrator
-demo_ao_resource_name: automation-orchestrator
+demo_ao_script_nodes_enabled: false
 ```
 
-Then apply combined configuration:
-
-```bash
-ansible-playbook playbooks/casc.yml \
-  -e ansible_python_interpreter="$(command -v python)"
-```
-
-`demo_ao_manage_script_nodes` defaults to false so other installations are not
-silently opted into script execution. On an installation where its administrator
-already enabled scripts, keep this management flag false. To disable execution
-again on a managed demo instance, retain `demo_ao_manage_script_nodes: true`, set
-`demo_ao_script_nodes_enabled: false`, and rerun CasC. The new harness will then
-stop at its preparation nodes until scripts are re-enabled or those nodes are
-replaced with an external preparation service.
+Then run `ansible-playbook playbooks/casc.yml`. Other installations can leave
+`demo_ao_manage_script_nodes: false` (the default); HTTP preparation works with
+script execution disabled. `demo_ao_namespace` and `demo_ao_resource_name`
+identify the operator resource for configuring precise native HTTP access.

@@ -3,10 +3,12 @@
 Uses only Python's standard library. Converts embedded resources to text before
 AO's MCP SDK sees them; no typed URI artifacts reach its graph checkpoint. The
 incoming bearer credential is forwarded only to the fixed upstream MCP URL and
-is never stored or logged. Only the demo's five read-only tools are exposed.
+is never stored or logged. Only the demo's five read-only GitHub tools and local handoff retrieval are exposed.
 """
 
 import copy
+from handoff_packets import HANDOFF_TOOL, PacketStore
+from prepare_agent_prompt import prepare_prompt
 import http.client
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -176,6 +178,7 @@ class AdapterServer(ThreadingHTTPServer):
             raise ValueError(
                 "Configure one HTTP(S) upstream URL without credentials, query or fragment"
             )
+        self.packets = PacketStore()
         self.upstream = upstream
         self.upstream_timeout = timeout
         super().__init__(address, AdapterHandler)
@@ -225,6 +228,55 @@ class AdapterHandler(BaseHTTPRequestHandler):
         self.send_body(405, headers={"Allow": "POST"})
 
     def do_POST(self):
+        if self.path in ("/handoffs", "/prepare-prompt"):
+            # Internal, bounded JSON storage only. No bearer or host credential
+            # is needed or forwarded; the returned random ID grants read access.
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if (
+                    self.headers.get("Transfer-Encoding")
+                    or not 0 < length <= MAX_REQUEST_BYTES
+                ):
+                    raise ValueError("A bounded handoff Content-Length is required")
+                if (
+                    self.headers.get("Content-Type", "").split(";")[0]
+                    != "application/json"
+                ):
+                    raise ValueError("Handoff upload requires application/json")
+                data = json.loads(self.rfile.read(length))
+                if not isinstance(data, dict):
+                    raise ValueError("Handoff request must be an object")
+                if self.path == "/prepare-prompt":
+                    if (
+                        set(data) != {"template", "contexts", "stage"}
+                        or not isinstance(data["template"], str)
+                        or not isinstance(data["contexts"], list)
+                        or not isinstance(data["stage"], str)
+                    ):
+                        raise ValueError(
+                            "Preparation requires template, contexts and stage"
+                        )
+                    self.send_json(
+                        200,
+                        prepare_prompt(
+                            data["template"],
+                            data["contexts"],
+                            data["stage"],
+                            store=self.server.packets.put,
+                        ),
+                    )
+                else:
+                    if set(data) != {"contexts"}:
+                        raise ValueError("Handoff upload requires only contexts")
+                    self.send_json(201, self.server.packets.put(data["contexts"]))
+            except (ValueError, OSError, IndexError, TypeError):
+                self.send_json(
+                    400,
+                    {
+                        "error": "Invalid or oversized handoff input; no agent was invoked"
+                    },
+                )
+            return
         if self.path != "/mcp":
             self.send_json(404, rpc_error(None, -32600, "Unknown MCP endpoint"))
             return
@@ -290,6 +342,35 @@ class AdapterHandler(BaseHTTPRequestHandler):
                 )
                 return
             params = request.get("params", {})
+            if (
+                method == "tools/call"
+                and isinstance(params, dict)
+                and params.get("name") == "read_handoff"
+            ):
+                try:
+                    args = params.get("arguments", {})
+                    if not isinstance(args, dict) or set(args) != {"packet_id"}:
+                        raise ValueError("read_handoff requires only packet_id")
+                    output = self.server.packets.get(args["packet_id"])
+                    result = {
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": json.dumps(
+                                    output, ensure_ascii=False, separators=(",", ":")
+                                ),
+                            }
+                        ]
+                    }
+                except ValueError as error:
+                    result = {
+                        "isError": True,
+                        "content": [{"type": "text", "text": str(error)}],
+                    }
+                self.send_json(
+                    200, {"jsonrpc": "2.0", "id": identifier, "result": result}
+                )
+                return
             if method == "tools/call" and (
                 not isinstance(params, dict)
                 or not isinstance(params.get("name"), str)
@@ -363,7 +444,12 @@ class AdapterHandler(BaseHTTPRequestHandler):
                 )
                 return
             payload = read_rpc_response(response, identifier)
-            self.send_json(200, normalize_response(payload, method), forwarded)
+            payload = normalize_response(payload, method)
+            if method == "tools/list" and isinstance(
+                payload.get("result", {}).get("tools"), list
+            ):
+                payload["result"]["tools"].append(HANDOFF_TOOL)
+            self.send_json(200, payload, forwarded)
         except (AdapterError, json.JSONDecodeError, ValueError) as error:
             message = (
                 str(error)

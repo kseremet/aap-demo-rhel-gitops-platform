@@ -61,6 +61,13 @@ def successful_results(packet):
                 for step in result["agent_trace"].get("steps", []):
                     if not isinstance(step, dict):
                         continue
+                    # A packet transports upstream claims. Reading it does not
+                    # independently measure a host or verify repository facts.
+                    if (
+                        str(step.get("tool_name", "")).removeprefix("functions.")
+                        == "read_handoff"
+                    ):
+                        continue
                     key = (step.get("call_id"), step.get("tool_name"))
                     if step.get("type") == "tool_call" and key[0]:
                         calls[key] = step.get("tool_input") or {}

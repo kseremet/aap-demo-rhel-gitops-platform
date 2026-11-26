@@ -25,9 +25,9 @@
   ansible.builtin.set_fact:
     _ao_workflow_definition: >-
       {{ (_ao_workflow_definition | to_json
-          | replace('"__AO_PREPARE_PROMPT_CODE__"',
-                    lookup('ansible.builtin.file', ao_workflow.path | dirname
-                      ~ '/../../files/ao/prepare_agent_prompt.py') | to_json)
+          | replace('__AO_HANDOFF_PREPARE_URL__',
+                    (ao_github_text_adapter_url | default('http://github-mcp-server:8083/mcp'))
+                    | regex_replace('/mcp$', '/prepare-prompt'))
           | replace('__AO_LLM_MODEL_ID__', ao_llm_model_id)
           | replace('__AO_LLM_CREDENTIAL_ID__', ao_llm_credential_id)
           | replace('__AO_AAP_INTEGRATION_ID__', ao_aap_integration_id)
@@ -36,9 +36,10 @@
           | replace('__AO_MCP_CREDENTIAL_ID__', ao_mcp_credential_id)
           | replace('__AO_GITHUB_MCP_INTEGRATION_ID__', ao_github_mcp_integration_id)
           | replace('__AO_GITHUB_MCP_CREDENTIAL_ID__', ao_github_mcp_credential_id)
-          | replace('["__AO_LINUX_TOOL_IDS__"]', ao_linux_tool_ids | to_json)
-          | replace('["__AO_GITHUB_TOOL_IDS__"]', ao_github_tool_ids | to_json)
-          | replace('["__AO_READONLY_TOOL_IDS__"]', ao_readonly_tool_ids | to_json)) | from_json }}
+          | replace('["__AO_HANDOFF_TOOL_IDS__"]', ao_handoff_tool_ids | to_json)
+          | replace('["__AO_LINUX_TOOL_IDS__"]', (ao_linux_tool_ids + ao_handoff_tool_ids) | unique | list | to_json)
+          | replace('["__AO_GITHUB_TOOL_IDS__"]', (ao_github_tool_ids + ao_handoff_tool_ids) | unique | list | to_json)
+          | replace('["__AO_READONLY_TOOL_IDS__"]', (ao_readonly_tool_ids + ao_handoff_tool_ids) | unique | list | to_json)) | from_json }}
   no_log: true
 
 - name: Look up an existing AO workflow with the same name

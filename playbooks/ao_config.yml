@@ -89,6 +89,10 @@
         - ao
         - validation
 
+    - name: Configure precise native HTTP access for handoff preparation
+      ansible.builtin.include_tasks: ao_configure_handoff_access.yml
+      tags: [ao, handoffs]
+
     # Enable only the administrator-approved demo execution capability.
     - name: Configure explicitly approved AO script execution
       ansible.builtin.include_tasks: ao_configure_script_nodes.yml

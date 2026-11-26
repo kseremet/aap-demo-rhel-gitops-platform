@@ -47,11 +47,20 @@
              'pull_request_read', 'search_code', 'list_commits']) | list }}
   changed_when: false
 
+- name: Select the adapter handoff retrieval tool
+  ansible.builtin.set_fact:
+    ao_handoff_tool_ids: >-
+      {{ _ao_tool_catalogs.results[1].json.resources
+         | selectattr('enabled', 'equalto', true)
+         | selectattr('status', 'equalto', 'available')
+         | selectattr('name', 'equalto', 'read_handoff') | map(attribute='id') | list }}
+
 - name: Require the tools used by the investigation harness
   ansible.builtin.assert:
     that:
       - "['get_system_information', 'read_file'] | difference(_ao_linux_tools | map(attribute='name') | list) | length == 0"
       - "['get_commit', 'get_file_contents', 'pull_request_read'] | difference(_ao_github_tools | map(attribute='name') | list) | length == 0"
+      - ao_handoff_tool_ids | length == 1
     fail_msg: Required read-only MCP tools are unavailable or disabled. Refresh the integrations before importing workflows.
 
 - name: Resolve explicit workflow tool selections
