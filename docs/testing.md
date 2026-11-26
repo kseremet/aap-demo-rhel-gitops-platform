@@ -37,6 +37,25 @@ Tracks testing progress for this demo. For procedural verification steps, see [s
 
 ## Latest local validation
 
+- 2026-11-26: Diagnosed the later `review_evidence` failure in execution
+  `c3658946-ba73-4c9d-bd02-2d7fb68e653f`: backend logs show HTTP 422 because
+  its resolved prompt was 74,300 characters and the invocation API permits
+  10,000. Removed duplicated raw invocation wrappers from model handoffs,
+  added deterministic compact JSON preparation and an explicit size guard
+  before every agent, and retained complete original traces for AAP validation.
+  All 144 local regression tests passed; both workflow draft validations returned
+  zero findings. Script nodes were initially disabled. After explicit informed
+  administrator approval, enabled the Developer Preview setting through AO's
+  existing admin-settings ConfigMap and rolled the workflow worker. The isolated
+  preparation node completed with an 8,130-character prompt. The final reviewed
+  instructions use 8,412 characters; isolated review execution
+  `e96cf36f-220b-4d08-a3e0-130debd294d1` completed and returned two focused
+  follow-up checks. AAP validation/publication remained skipped. Focused lint,
+  syntax, importer/schema, and routing checks passed. Reapplying the approved
+  configuration reported zero changes. CasC management is explicitly opt-in
+  and supports disabling the setting again. Full incident/PR
+  feedback validation remains pending; no publication job was launched.
+
 - 2026-11-26: Deployed a GitHub MCP text compatibility sidecar on the existing
   GitHub MCP Service hostname, port 8083. Kept AO source, image, operator settings,
   and allowlist unchanged. Preserved the original MCP port and pinned its

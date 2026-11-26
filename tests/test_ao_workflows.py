@@ -8,6 +8,7 @@ from collections import defaultdict
 from copy import deepcopy
 from graphlib import TopologicalSorter
 import inspect
+import runpy
 import json
 from pathlib import Path
 import sys
@@ -68,7 +69,9 @@ def test_schema_contracts_and_graph(path):
             schema = node["parameters"]["response_schema"]
             jsonschema.Draft7Validator.check_schema(schema)
             jsonschema.validate(example(schema), schema)
-            prompt = node["parameters"]["prompt"]
+            prompt = nodes["handoff_" + name]["parameters"]["environment"][
+                "PROMPT_TEMPLATE"
+            ]
             assert json.dumps(schema, separators=(",", ":")) not in prompt
             assert (
                 "Response contract (also enforced as the response schema):"
@@ -221,7 +224,9 @@ def test_routing_and_loop_expression_resolution(
     trace = []
     inside_loop = False
     while True:
-        assert len(trace) < 50, "Workflow did not terminate within its diagnostic bound"
+        assert (
+            len(trace) < 100
+        ), "Workflow did not terminate within its diagnostic bound"
         node = nodes[current]
         trace.append(current)
         resolver.set_context(loop_node_id="evidence_loop" if inside_loop else None)
@@ -274,6 +279,22 @@ def test_routing_and_loop_expression_resolution(
             )
         else:
             params = resolver.resolve_dict(node["parameters"])
+            if kind == "script":
+                env = params["environment"]
+                prepare = runpy.run_path(
+                    str(ROOT / "files/ao/prepare_agent_prompt.py")
+                )["prepare_prompt"]
+                output = prepare(
+                    env["PROMPT_TEMPLATE"],
+                    [
+                        env["HANDOFF_" + str(i)]
+                        for i in range(int(env["HANDOFF_COUNT"]))
+                    ],
+                    env["HANDOFF_STAGE"],
+                )
+                resolver.set_namespace(current, output)
+                current = outgoing[current][0]["to"]
+                continue
             if current == "follow_up_check":
                 assert f"Check index:\n{len(loop_results)}\n" in params["prompt"]
                 assert f"Check {len(loop_results)}" in params["prompt"]
@@ -485,8 +506,9 @@ def test_missing_tool_execution_stops_each_collector(path):
             for e in workflow["edges"]
             if e["from"] == stage + "_tools" and e["from_port"] == "false"
         )
-        assert target == "report_" + stage + "_tools"
-        assert nodes[target]["parameters"]["tool_selection_strategy"] == "NONE"
+        assert target == "handoff_report_" + stage + "_tools"
+        reporter = next(e["to"] for e in workflow["edges"] if e["from"] == target)
+        assert nodes[reporter]["parameters"]["tool_selection_strategy"] == "NONE"
 
 
 @pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.stem)

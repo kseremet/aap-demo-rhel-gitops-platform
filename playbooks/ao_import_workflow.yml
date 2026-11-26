@@ -25,6 +25,9 @@
   ansible.builtin.set_fact:
     _ao_workflow_definition: >-
       {{ (_ao_workflow_definition | to_json
+          | replace('"__AO_PREPARE_PROMPT_CODE__"',
+                    lookup('ansible.builtin.file', ao_workflow.path | dirname
+                      ~ '/../../files/ao/prepare_agent_prompt.py') | to_json)
           | replace('__AO_LLM_MODEL_ID__', ao_llm_model_id)
           | replace('__AO_LLM_CREDENTIAL_ID__', ao_llm_credential_id)
           | replace('__AO_AAP_INTEGRATION_ID__', ao_aap_integration_id)

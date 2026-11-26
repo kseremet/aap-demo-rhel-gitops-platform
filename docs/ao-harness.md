@@ -315,3 +315,71 @@ transport workaround. Full incident and PR feedback tests remain pending.
 The evidence validator accepts pinned file reads expressed through either GitHub
 MCP argument name, `sha` or `ref`. Both require the exact inspected commit; a
 moving branch or conflicting aliases are rejected.
+
+## Compact handoffs and the invocation API limit
+
+The installed invocation API rejects a `prompt` longer than 10,000 characters,
+although the workflow engine itself permits a larger resolved prompt. The
+2026-11-26 review failure was HTTP 422 on `body.prompt`: copying three complete
+invocation wrappers expanded that prompt to 74,300 characters. This was separate
+from the earlier embedded-resource checkpoint defect.
+
+Both workflows now prepare every agent's input with a Python script node. The
+importer injects the version-controlled code from
+`files/ao/prepare_agent_prompt.py`. This code serializes handoffs as compact JSON,
+unwraps loop result envelopes, and checks the final character count. Review and
+assessment prompts receive structured handoffs rather than duplicated raw tool
+traces. Full collector, reviewer, assessor, and loop outputs still go unchanged
+to the read-only AAP evidence validator; the writer's independent provenance gate
+also remains in place. Response schemas and publication conditions are unchanged.
+
+Preparation does not execute event/repository text, summarize with another model,
+or truncate evidence, file content, or blockers. If the compact prompt still
+exceeds 10,000 characters, it stops before model invocation with the stage name,
+actual size, and limit. Narrow the case or split the handoff if that happens;
+increasing only the workflow engine's limit cannot bypass the API's hard cap.
+The isolated review replay completed with an 8,412-character prompt and returned
+two focused follow-up checks. Collector prompts request short exact excerpts while keeping full tool results
+in the original trace. Large file plans or four verbose follow-up results can
+still exceed the installed API limit; this guard fails closed rather than hiding
+evidence to force a publishable result.
+
+### Enable script nodes on the trusted demo instance
+
+AO labels script nodes **Developer Preview** and disables them by default.
+Enabling the feature lets every user with workflow-create and execution-run
+permissions execute Python or Bash on AO's Temporal workers, with access to
+worker environment variables. Obtain the instance administrator's explicit
+approval of that capability before enabling it. This demo's preparation code
+only processes JSON/string inputs; the feature setting itself is instance-wide.
+
+The administrator explicitly approved this setting for the current demo AO
+instance after reviewing that impact. Its existing operator-managed worker
+Deployment already references `<AO resource name>-admin-settings` through
+`envFrom`. The configuration tasks set only `APP_SCRIPT_NODES_ENABLED` in that
+ConfigMap and roll the workflow worker using a stable annotation. No source,
+image, operator Deployment, or integration allowlist is changed.
+
+For a similarly approved demo instance, put these values in local demo variables:
+
+```yaml
+demo_ao_manage_script_nodes: true
+demo_ao_script_nodes_enabled: true
+demo_ao_namespace: automation-orchestrator
+demo_ao_resource_name: automation-orchestrator
+```
+
+Then apply combined configuration:
+
+```bash
+ansible-playbook playbooks/casc.yml \
+  -e ansible_python_interpreter="$(command -v python)"
+```
+
+`demo_ao_manage_script_nodes` defaults to false so other installations are not
+silently opted into script execution. On an installation where its administrator
+already enabled scripts, keep this management flag false. To disable execution
+again on a managed demo instance, retain `demo_ao_manage_script_nodes: true`, set
+`demo_ao_script_nodes_enabled: false`, and rerun CasC. The new harness will then
+stop at its preparation nodes until scripts are re-enabled or those nodes are
+replaced with an external preparation service.
