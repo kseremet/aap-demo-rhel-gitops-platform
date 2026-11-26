@@ -50,8 +50,11 @@
         refresh: true
       - name: "{{ demo_ao_mcp_integration_name }}"
         integration_type: mcp_server
-        credential_type_name: ""
-        credential_inputs: {}
+        # UI compatibility only: Linux MCP does not validate bearer tokens.
+        # Keep the real GitHub token out of this integration's requests.
+        credential_type_name: HTTP Bearer Token
+        credential_inputs:
+          token: rhel-gitops-linux-mcp-ui-placeholder
         configuration:
           integration_type: mcp_server
           base_url: "{{ demo_ao_mcp_url }}"
@@ -383,6 +386,9 @@
           - "(ao_llm_credential_id | default('') | string) != 'None'"
           - "ao_llm_model_id is defined"
           - "ao_mcp_integration_id is defined"
+          - "ao_mcp_credential_id is defined"
+          - "(ao_mcp_credential_id | default('') | string | length) > 0"
+          - "(ao_mcp_credential_id | default('') | string) != 'None'"
           - "ao_github_mcp_integration_id is defined"
           - "ao_github_mcp_credential_id is defined"
           - "(ao_github_mcp_credential_id | default('') | string | length) > 0"

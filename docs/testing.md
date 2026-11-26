@@ -37,6 +37,18 @@ Tracks testing progress for this demo. For procedural verification steps, see [s
 
 ## Latest local validation
 
+- 2026-11-26: Preserved the Linux connection UI workaround in CasC with a
+  dedicated non-secret HTTP Bearer Token credential named by the Linux MCP
+  integration. Linux-only steps receive its connection; mixed-tool steps receive
+  separate Linux and GitHub connections; GitHub-only steps retain only GitHub.
+  All 27 workflow checks, including concrete importer credential bindings and
+  frontend/backend validation, passed. Both deployed AO workflow validations
+  returned zero findings; CasC syntax, offline lint, and diff checks passed.
+  Created the dedicated dummy credential and confirmed an isolated AO Linux
+  tool call using it returned `web-01-gitops`. Full workflow imports/publication
+  remain a maintainer live-test step. Prompts, schemas, routing, and evidence
+  gates are unchanged. The GitHub API token is not reused for Linux MCP.
+
 - 2026-11-26: Final regression suite: **104 passed**. Combined CasC and
   evidence-validator syntax checks, offline Ansible lint (zero failures/warnings),
   both deployed AO workflow-validation requests (zero findings), and diff checks

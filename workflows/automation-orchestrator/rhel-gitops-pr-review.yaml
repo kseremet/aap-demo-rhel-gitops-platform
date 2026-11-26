@@ -135,8 +135,10 @@ nodes:
     credential_id: __AO_LLM_CREDENTIAL_ID__
     tool_selection_strategy: SELECTED
     integration_connections:
-    - integration_id: __AO_GITHUB_MCP_INTEGRATION_ID__
-      credential_id: __AO_GITHUB_MCP_CREDENTIAL_ID__
+    # Use a non-secret dummy bearer credential for AO's connection UI.
+    # Linux MCP remains unauthenticated; this does not provide SSH credentials.
+    - integration_id: __AO_MCP_INTEGRATION_ID__
+      credential_id: __AO_MCP_CREDENTIAL_ID__
     response_schema:
       type: object
       additionalProperties: false
@@ -323,6 +325,10 @@ nodes:
     credential_id: __AO_LLM_CREDENTIAL_ID__
     tool_selection_strategy: SELECTED
     integration_connections:
+    # Use a non-secret dummy bearer credential for AO's connection UI.
+    # Linux MCP remains unauthenticated; this does not provide SSH credentials.
+    - integration_id: __AO_MCP_INTEGRATION_ID__
+      credential_id: __AO_MCP_CREDENTIAL_ID__
     - integration_id: __AO_GITHUB_MCP_INTEGRATION_ID__
       credential_id: __AO_GITHUB_MCP_CREDENTIAL_ID__
     response_schema:
@@ -508,6 +514,10 @@ nodes:
     credential_id: __AO_LLM_CREDENTIAL_ID__
     tool_selection_strategy: SELECTED
     integration_connections:
+    # Use a non-secret dummy bearer credential for AO's connection UI.
+    # Linux MCP remains unauthenticated; this does not provide SSH credentials.
+    - integration_id: __AO_MCP_INTEGRATION_ID__
+      credential_id: __AO_MCP_CREDENTIAL_ID__
     - integration_id: __AO_GITHUB_MCP_INTEGRATION_ID__
       credential_id: __AO_GITHUB_MCP_CREDENTIAL_ID__
     response_schema:
@@ -608,6 +618,10 @@ nodes:
     credential_id: __AO_LLM_CREDENTIAL_ID__
     tool_selection_strategy: SELECTED
     integration_connections:
+    # Use a non-secret dummy bearer credential for AO's connection UI.
+    # Linux MCP remains unauthenticated; this does not provide SSH credentials.
+    - integration_id: __AO_MCP_INTEGRATION_ID__
+      credential_id: __AO_MCP_CREDENTIAL_ID__
     - integration_id: __AO_GITHUB_MCP_INTEGRATION_ID__
       credential_id: __AO_GITHUB_MCP_CREDENTIAL_ID__
     response_schema:
@@ -703,6 +717,10 @@ nodes:
     credential_id: __AO_LLM_CREDENTIAL_ID__
     tool_selection_strategy: SELECTED
     integration_connections:
+    # Use a non-secret dummy bearer credential for AO's connection UI.
+    # Linux MCP remains unauthenticated; this does not provide SSH credentials.
+    - integration_id: __AO_MCP_INTEGRATION_ID__
+      credential_id: __AO_MCP_CREDENTIAL_ID__
     - integration_id: __AO_GITHUB_MCP_INTEGRATION_ID__
       credential_id: __AO_GITHUB_MCP_CREDENTIAL_ID__
     response_schema:

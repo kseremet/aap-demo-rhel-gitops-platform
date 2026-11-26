@@ -86,11 +86,14 @@ tools are excluded. The three initial collectors must record an actual tool call
 a missing call routes to a dedicated blocked terminal. A recorded call alone does
 not establish a successful measurement.
 
-The unauthenticated Linux MCP service deliberately has no bearer execution
-credential. AO's **Set up connection** label means that no execution credential is
-selected; it does not test connectivity or SSH access. GitHub MCP uses its explicit
-bearer execution credential. Do not add a dummy bearer credential to hide the Linux
-label.
+The Linux MCP endpoint uses unauthenticated HTTP. To preserve the UI workaround,
+CasC creates a dedicated **RHEL GitOps Linux MCP** HTTP Bearer Token credential
+(named by `demo_ao_mcp_integration_name`) containing a non-secret dummy value.
+Steps selecting Linux tools explicitly associate that credential with Linux MCP.
+GitHub tools retain the **RHEL GitOps GitHub MCP** credential and its real GitHub
+token. The dummy header satisfies AO's connection UI; Linux MCP does not validate
+it, and it does not supply SSH credentials or fix host reachability. CasC preserves
+these separate mappings on every workflow import.
 
 Before importing workflows, CasC refreshes the existing managed Linux MCP SSH
 aliases from running VMIs. It preserves the ConfigMap's policy, SSH identity, and

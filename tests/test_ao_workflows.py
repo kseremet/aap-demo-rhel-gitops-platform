@@ -131,6 +131,7 @@ def test_against_ao_workflow_schemas(path):
             "ao_aap_integration_id",
             "ao_aap_credential_id",
             "ao_mcp_integration_id",
+            "ao_mcp_credential_id",
             "ao_github_mcp_integration_id",
             "ao_github_mcp_credential_id",
             "ao_eda_service_account_id",
@@ -149,6 +150,32 @@ def test_against_ao_workflow_schemas(path):
             )
         )
     validator.validate(variables["_ao_workflow_definition"])
+    for node in variables["_ao_workflow_definition"]["nodes"]:
+        params = node.get("parameters", {})
+        if params.get("tool_selection_strategy") != "SELECTED":
+            continue
+        selected = params["tool_selections"]
+        expected = set()
+        if selected in (
+            variables["ao_linux_tool_ids"],
+            variables["ao_readonly_tool_ids"],
+        ):
+            expected.add(variables["ao_mcp_integration_id"])
+        if selected in (
+            variables["ao_github_tool_ids"],
+            variables["ao_readonly_tool_ids"],
+        ):
+            expected.add(variables["ao_github_mcp_integration_id"])
+        assert {
+            c["integration_id"] for c in params["integration_connections"]
+        } == expected
+        for connection in params["integration_connections"]:
+            expected_credential = (
+                variables["ao_mcp_credential_id"]
+                if connection["integration_id"] == variables["ao_mcp_integration_id"]
+                else variables["ao_github_mcp_credential_id"]
+            )
+            assert connection["credential_id"] == expected_credential
 
 
 def ao_runtime():
