@@ -40,6 +40,17 @@
         _ao_report: "{{ ao_report if ao_report is mapping else (ao_report | from_json) }}"
         _ao_review: "{{ ao_review if ao_review is mapping else (ao_review | from_json) }}"
 
+    # Recheck provenance at the write boundary; an old workflow or direct launch
+    # must not bypass the read-only validation node in the new workflows.
+    - name: Require successful runtime evidence and resolved diagnostic blockers
+      ansible.builtin.assert:
+        that:
+          - >-
+            (_ao_report | ao_validate_evidence(ao_evidence | default({}),
+              ao_evidence_review | default({}), demo_state_scm_url)).valid
+        fail_msg: Runtime evidence is missing, unsuccessful, unpinned, or has unresolved blockers.
+      no_log: true
+
     - name: Validate repository identity and the reviewed change contract
       ansible.builtin.set_fact:
         _ao_plan: >-

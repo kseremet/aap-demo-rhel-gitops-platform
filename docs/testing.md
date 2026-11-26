@@ -24,16 +24,49 @@ Tracks testing progress for this demo. For procedural verification steps, see [s
 |---|---|---|---|
 | AO GitOps Action (`ai/run_ao_gitops_action.yml`) | Partial | 2026-11-26 | Reviewed plan/report contract, pinned branch/blob checks, consumed-variable and exact YAML delta validation, full PR reporting, and atomic multi-file commit publication implemented. Offline fake-API tests cover create/revise and zero mutations on preflight failure. Syntax and offline lint passed; live AAP/GitHub validation is pending. |
 
+| AO Evidence Validation (`ai/validate_ao_evidence.yml`) | Partial | 2026-11-26 | Read-only runtime provenance, commit/host scope, exact excerpts, typed JSON fields, and blocker resolution checks implemented. Local Ansible execution returns routable valid/blocked artifacts. Live AAP job validation remains pending. |
+
 | AO Event Bridge (`ai/forward_event_to_ao.yml`) | Partial | 2026-11-26 | Clean SCM checkout test passed without ignored local configuration files. CasC explicitly enables launch variables and supplies TLS configuration. Live EDA-to-AO validation remains pending. |
 
 ### Workflows
 
 | Component | Status | Last tested | Notes |
 |---|---|---|---|
-| AO incident investigation (`rhel-gitops-incident.yaml`) | Partial | 2026-11-26 | Added request scoping, repository mapping, independent evidence review, bounded targeted-diagnostic loop, final assessment, independent plan review, and explicit no-write branches. Importer substitutions, AO schemas, and routing checks using AO expression resolution passed. Live MCP/LLM validation is pending. |
-| AO PR review (`rhel-gitops-pr-review.yaml`) | Partial | 2026-11-26 | Uses the same evidence/review harness while preserving PR identity and distinguishing revision requests from questions/approval. Importer substitutions, AO schemas, and routing checks passed. Live maintainer-feedback validation is pending. |
+| AO incident investigation (`rhel-gitops-incident.yaml`) | Partial | 2026-11-26 | Added request scoping, repository mapping, independent evidence review, bounded targeted-diagnostic loop, final assessment, independent plan review, and explicit no-write branches. Importer substitutions, AO schemas, and routing checks using AO expression resolution passed. Deployed AO API validation passed with zero findings. Isolated GitHub and Linux tool calls succeeded after repairing stale SSH aliases; full incident-to-PR validation remains pending. |
+| AO PR review (`rhel-gitops-pr-review.yaml`) | Partial | 2026-11-26 | Uses the same evidence/review harness while preserving PR identity and distinguishing revision requests from questions/approval. Importer substitutions, AO schemas, and routing checks passed. Explicit read-only tools, runtime evidence validation, and blocker gates added. Deployed AO API validation passed; live maintainer-feedback validation remains pending. |
 
 ## Latest local validation
+
+- 2026-11-26: Final regression suite: **104 passed**. Combined CasC and
+  evidence-validator syntax checks, offline Ansible lint (zero failures/warnings),
+  both deployed AO workflow-validation requests (zero findings), and diff checks
+  passed. Full live AAP/GitHub and maintainer-feedback testing remains pending.
+
+- 2026-11-26: Added explicit per-stage read-only tool selections, mandatory
+  collector tool-call gates, bounded tool prompts, raw runtime evidence handoffs,
+  and a read-only AAP provenance validator before both ready/no-change routes.
+  The writer repeats provenance validation before GitHub access. Reviewer blockers
+  require explicit evidence-backed resolutions. Local checks cover fabricated
+  evidence, failed/missing results, unpinned reads, incorrect hosts, short scalar
+  results, display tool namespaces, unresolved blockers, and actual AAP artifact
+  output. All four observations from the final live host probe also matched their
+  successful runtime tool outputs. Both workflow definitions passed the deployed AO 1.3.0 validation API
+  with zero errors/warnings; local syntax, frontend/backend expression, and lint
+  checks passed. Full AAP incident-to-PR and maintainer-feedback runs remain pending.
+- Live read-only AO diagnostics confirmed tools are callable with and without
+  response schemas. GitHub returned the real main SHA. Linux MCP authorized calls
+  but SSH used stale pod-network addresses. Refreshed only the four managed SSH
+  aliases from live VMIs; policy and SSH identity were preserved. AO subsequently
+  returned `web-01-gitops`, and the bounded updated host prompt read the actual
+  somaxconn value `65535`. CasC now refreshes aliases without rewriting local
+  generated inventory. The UI's Linux "Set up connection" label reflects the
+  intentionally absent bearer credential, not an authentication failure.
+- An isolated multi-tool workflow test exposed AO's
+  `Type is not msgpack serializable: ToolMessage` error path; an unbounded
+  diagnostic probe also reached the agent recursion limit. Added per-step tool
+  budgets and sequential-read instructions. AO runtime failures remain blocking;
+  no installed AO package or global system prompt was changed.
+
 
 - 2026-11-26: Replaced frontend-rejected `loop.index` / `loop.item` references with
   the named loop's iteration count and the original reviewer checklist. All 21
@@ -84,3 +117,7 @@ Tracks testing progress for this demo. For procedural verification steps, see [s
 - Live-test separate branches for repeated incidents and atomic revisions on the existing PR. AAP publishes all file changes in one commit, but later PR/report API failures can leave publication partially complete; inspect GitHub before relaunching.
 - Make the updated writer available to the AAP platform project and apply both workflow and JT configuration through `playbooks/casc.yml` together. Uncommitted local code is not available to a remote AAP SCM sync.
 - Live-test both workflows with the configured model: verify actual host/tool targeting, policy evidence, precedence/scope, reviewer-requested checks, no-change/blocked/rejected outcomes, complete reporting, and non-recursive feedback handling. See [ao-harness.md](ao-harness.md). Local checks do not establish runtime success.
+
+- If AO reproduces `Type is not msgpack serializable: ToolMessage`, capture the
+  failed invocation and AO worker traceback for a platform runtime fix. The demo
+  cannot treat this failure as evidence or a justified no-change result.

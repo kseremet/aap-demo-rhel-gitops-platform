@@ -29,7 +29,8 @@ WORKFLOWS = list((ROOT / "workflows/automation-orchestrator").glob("*.yaml"))
 
 @pytest.fixture(scope="module", autouse=True)
 def initialize_ansible_plugins():
-    init_plugin_loader()
+    if not any(type(f).__name__ == "_AnsibleCollectionFinder" for f in sys.meta_path):
+        init_plugin_loader()
 
 
 def example(spec):
@@ -83,6 +84,8 @@ def test_schema_contracts_and_graph(path):
         "ao_report",
         "ao_review",
         "ao_execution_id",
+        "ao_evidence",
+        "ao_evidence_review",
     }
 
 
@@ -133,6 +136,11 @@ def test_against_ao_workflow_schemas(path):
             "ao_eda_service_account_id",
         ]
     }
+    variables.update(
+        ao_linux_tool_ids=[str(uuid4())],
+        ao_github_tool_ids=[str(uuid4())],
+        ao_readonly_tool_ids=[str(uuid4())],
+    )
     variables["ao_workflow"] = {"path": str(path), "webhook_path": path.stem}
     for task in tasks[:4]:
         variables.update(
@@ -242,6 +250,20 @@ def test_routing_and_loop_expression_resolution(
             if current == "follow_up_check":
                 assert f"Check index:\n{len(loop_results)}\n" in params["prompt"]
                 assert f"Check {len(loop_results)}" in params["prompt"]
+            if current == "validate_evidence":
+                resolver.set_namespace(
+                    current,
+                    {
+                        "artifacts": {
+                            "ao_evidence_validation": {
+                                "valid": decision != "blocked",
+                                "blocking_findings": [],
+                            }
+                        }
+                    },
+                )
+                current = outgoing[current][0]["to"]
+                continue
             if kind == "aap_job_template":
                 assert current == terminal
                 assert params["extra_vars"]["ao_report"]["decision"] == "ready"
@@ -259,13 +281,20 @@ def test_routing_and_loop_expression_resolution(
                 ]
             if current == "final_assessment":
                 result["decision"] = decision
+                result["conclusion_status"] = "confirmed"
             if current == "review_plan":
                 result.update(
                     approved=approved,
                     blocking_findings=[] if approved else ["Unproven edit"],
                 )
             jsonschema.validate(result, params["response_schema"])
-            resolver.set_namespace(current, {"result": {"content": result}})
+            resolver.set_namespace(
+                current,
+                {
+                    "id": str(uuid4()),
+                    "result": {"content": result, "tools_used": ["get_file_contents"]},
+                },
+            )
             if current == "follow_up_check":
                 loop_results.append({"content": deepcopy(result)})
         successors = [
@@ -410,3 +439,57 @@ def test_frontend_accepts_all_workflow_variable_references(path, tmp_path):
         'node or trigger "loop" does not exist' in error["message"]
         for error in regression_errors
     )
+
+
+@pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.stem)
+def test_missing_tool_execution_stops_each_collector(path):
+    _, evaluate = ao_runtime()
+    workflow = yaml.safe_load(path.read_text())
+    nodes = {n["id"]: n for n in workflow["nodes"]}
+    for stage in ["scope_request", "investigate_host", "map_repository"]:
+        condition = nodes[stage + "_tools"]["parameters"]["condition"]
+        for used, allowed in [([], False), (None, False), (["read_file"], True)]:
+            assert (
+                evaluate(condition, {stage: {"result": {"tools_used": used}}})
+                is allowed
+            )
+        target = next(
+            e["to"]
+            for e in workflow["edges"]
+            if e["from"] == stage + "_tools" and e["from_port"] == "false"
+        )
+        assert target == "report_" + stage + "_tools"
+        assert nodes[target]["parameters"]["tool_selection_strategy"] == "NONE"
+
+
+@pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.stem)
+@pytest.mark.parametrize("decision", ["ready", "no_change"])
+def test_neither_success_route_can_bypass_evidence_validation(path, decision):
+    _, evaluate = ao_runtime()
+    nodes = {n["id"]: n for n in yaml.safe_load(path.read_text())["nodes"]}
+    case = next(
+        c
+        for c in nodes["route_assessment"]["parameters"]["cases"]
+        if c["port"] == decision
+    )
+    for verified, certainty, blockers, allowed in [
+        (True, "confirmed", [], True),
+        (False, "confirmed", [], False),
+        (True, "hypothesis", [], False),
+        (True, "confirmed", ["Unresolved cause"], False),
+    ]:
+        ns = {
+            "validate_evidence": {
+                "artifacts": {"ao_evidence_validation": {"valid": verified}}
+            },
+            "final_assessment": {
+                "result": {
+                    "content": {
+                        "decision": decision,
+                        "conclusion_status": certainty,
+                        "blocking_findings": blockers,
+                    }
+                }
+            },
+        }
+        assert evaluate(case["condition"], ns) is allowed

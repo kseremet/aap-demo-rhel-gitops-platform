@@ -26,6 +26,8 @@ For each requested check (0 to 4): collect the missing observation
         |
 Final assessment with the original and additional evidence
         |
+Read-only AAP evidence validation against runtime tool traces
+        |
         +-- no_change --> report why no repository edit is needed
         +-- blocked ----> report missing evidence / contradictions
         |
@@ -75,10 +77,54 @@ in a separate call, without the full tool transcript. A schema alone cannot reco
 observations that the investigative answer omitted. The harness changes no AO
 runtime source or global system prompt.
 
+## Tool execution and evidence provenance
+
+CasC discovers explicit, available read-only tool UUIDs from the two demo MCP
+integrations. Repository steps receive GitHub tools, the host step receives Linux
+tools, and cross-check steps receive both. Other project integrations and write
+tools are excluded. The three initial collectors must record an actual tool call;
+a missing call routes to a dedicated blocked terminal. A recorded call alone does
+not establish a successful measurement.
+
+The unauthenticated Linux MCP service deliberately has no bearer execution
+credential. AO's **Set up connection** label means that no execution credential is
+selected; it does not test connectivity or SSH access. GitHub MCP uses its explicit
+bearer execution credential. Do not add a dummy bearer credential to hide the Linux
+label.
+
+Before importing workflows, CasC refreshes the existing managed Linux MCP SSH
+aliases from running VMIs. It preserves the ConfigMap's policy, SSH identity, and
+unrelated entries and does not rewrite generated local inventory files. Custom
+external MCP endpoints remain responsible for their own host addressing. Projected
+ConfigMap changes can take a short time to reach the MCP pod.
+
+Every reported observation includes an exact `tool_output_excerpt`. The workflows
+send the original runtime invocation wrappers, including loop/assessor outputs,
+to **JT - AO Evidence Validation**. This read-only AAP job requires matched,
+successful `tool_call`/`tool_result` pairs, rejects tool errors, checks the commit
+against a real `get_commit` result, requires file reads pinned to that commit,
+and requires identity and supporting measurements for the actual target host.
+Each claimed excerpt and tool name must match a successful runtime result.
+For structured JSON results, a selected object of unchanged returned fields is
+compared by key and typed value, allowing JSON spacing and subset formatting.
+The validator accepts AO's `functions.` display prefix and complete short scalar
+outputs; short substrings and excerpts attributed to a different file are rejected.
+Agent-written reasoning and `tools_used` summaries cannot supply this proof.
+
+Both `ready` and `no_change` require this validator's positive verdict, a confirmed
+assessment, and no final blocking findings. Each original reviewer blocker needs
+an explicit resolution naming that finding and supported evidence IDs. An empty
+follow-up checklist does not clear blockers. Missing observations must produce
+`blocked`, including when no repository edit can yet be justified. The writer
+repeats the same evidence validation at the mutation boundary. These checks prove
+trace provenance and declared scope, not every semantic inference an agent makes;
+independent plan review and human review remain required.
+
 ## AAP publication contract
 
-`JT - AO GitOps Action` receives four values: `ao_plan`, `ao_report`, `ao_review`,
-and `ao_execution_id`. Older workflows supplying only `ao_plan` are rejected.
+`JT - AO GitOps Action` receives `ao_plan`, `ao_report`, `ao_review`,
+`ao_execution_id`, `ao_evidence`, and `ao_evidence_review`. Older workflows
+without runtime evidence are rejected before GitHub access.
 The standalone playbook retains its local `vars_files`, with empty fallbacks when
 ignored files are absent from an AAP SCM checkout. CasC binds repository identity,
 API URL, and branch prefix into the stored job template; credentials supply secrets.
@@ -148,11 +194,13 @@ ansible-playbook playbooks/casc.yml --vault-id @prompt
 ### Test the published platform revision
 
 When the supporting services and integrations are already configured, do not
-rerun VM provisioning or redeploy MCP servers. From the updated platform checkout:
+rerun VM provisioning. CasC refreshes the managed MCP SSH aliases from the current
+VM addresses; it does not redeploy the server. From the updated platform checkout:
 
 ```bash
 ansible-playbook playbooks/casc.yml --syntax-check
-ansible-playbook playbooks/casc.yml --vault-id @prompt
+# Use --vault-id @prompt only when vault.yml is encrypted.
+ansible-playbook playbooks/casc.yml
 ```
 
 The importer updates workflows with matching names in place. Deleting them is
@@ -160,9 +208,14 @@ optional and removes their execution/version history. Export them first if you
 want a clean recreation. Delete only `rhel-gitops-incident-investigation` and
 `rhel-gitops-pr-review`; retain their project, integrations, and credentials.
 
+Because this revision adds a new playbook, sync the AAP platform Project to the
+new commit before CasC if Controller validates playbook availability during job
+template creation.
+
 After CasC completes:
 
-1. Sync the AAP `rhel-gitops-platform` project (or your configured project name)
+1. Confirm CasC created **JT - AO Evidence Validation** alongside the writer.
+   Sync the AAP `rhel-gitops-platform` project (or your configured project name)
    and confirm its SCM revision contains the new writer and filter plugin.
 2. Sync the EDA `RHEL GitOps EDA` project if needed and confirm the GitHub rulebook
    activation is enabled. CasC refreshes the bridge's AO service-account credential.
@@ -171,7 +224,8 @@ After CasC completes:
 4. Create a new issue in the state repository with the `ai-investigate` label and
    the same `web-01` / `net.core.somaxconn` incident wording used for CrewAI.
 5. Follow EDA to `JT - AO Event Bridge`, the AO investigation, and then
-   `JT - AO GitOps Action` if the assessment is ready and independent review approves.
+   `JT - AO Evidence Validation`, then `JT - AO GitOps Action` only if the
+   evidence is verified, the assessment is ready, and independent review approves.
    No-change and blocked outcomes intentionally do not create a PR.
 6. Inspect the complete PR report and effective YAML change. Add a scoped revision
    request to that PR and verify the feedback workflow updates the same branch.
@@ -195,6 +249,8 @@ still run. With Node 24+ available, an additional check uses AO's actual visual
 expression parser and serializer to verify saved conditions retain their meaning,
 and its frontend variable-reference validator to check every workflow parameter.
 
+Mock only the trigger event. Pinned agent outputs are not fresh runtime evidence.
+
 For live validation, use the same incident wording and repository revision as the
 CrewAI comparison. Inspect every agent's final output and actual tool arguments /
 results. Check these outcomes:
@@ -213,3 +269,20 @@ results. Check these outcomes:
 
 Local checks do not establish live success. Record the results in `docs/testing.md`
 only after the maintainer confirms the testing-log update.
+
+## Runtime findings from the comparison incident
+
+On 2026-11-26, AO 1.3.0 accepted isolated tool calls with and without response
+schemas. GitHub `get_commit` returned the actual repository commit. The earlier
+incident had made zero tool calls and repeated fabricated host/policy claims.
+The harness now makes calls mandatory and rejects unsupported outcomes.
+
+Live diagnostics also found stale Linux MCP SSH aliases after VM address changes;
+Linux MCP authorized the calls but SSH timed out against the old addresses.
+The aliases were refreshed from live VMIs, and the same repair is now part of CasC.
+A subsequent AO call identified `web-01-gitops`, and the updated bounded host
+prompt measured the actual somaxconn value `65535` through Linux MCP.
+A separate isolated workflow-node test exposed an AO/LangGraph error:
+`Type is not msgpack serializable: ToolMessage`. Keep this as an AO runtime issue
+if it recurs; do not treat failed tool handling as a measured incident result.
+The platform demo does not patch AO's installed Python packages or global prompt.

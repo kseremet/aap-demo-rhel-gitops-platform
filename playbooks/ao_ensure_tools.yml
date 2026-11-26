@@ -1,0 +1,62 @@
+---
+# Use explicit, project-owned read-only tools. An enabled integration or a
+# successful tools/list check does not prove that a workflow executed a tool.
+- name: Read the Linux and GitHub MCP tool catalogs
+  ansible.builtin.uri:
+    url: "{{ ao_api_base_url }}/integrations/{{ item }}/tools?limit=100"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ ao_access_token }}"
+    status_code: 200
+    return_content: true
+    validate_certs: "{{ demo_ao_validate_certs }}"
+  loop:
+    - "{{ ao_mcp_integration_id }}"
+    - "{{ ao_github_mcp_integration_id }}"
+  register: _ao_tool_catalogs
+  changed_when: false
+  no_log: true
+
+- name: Require complete MCP catalogs
+  ansible.builtin.assert:
+    that:
+      - item.json.next is none
+    fail_msg: MCP tool catalog exceeds one page; extend pagination before importing workflows.
+  loop: "{{ _ao_tool_catalogs.results }}"
+  loop_control:
+    label: MCP tool catalog
+  no_log: true
+
+- name: Select available read-only tools from the intended integrations
+  ansible.builtin.set_fact:
+    _ao_linux_tools: >-
+      {{ _ao_tool_catalogs.results[0].json.resources
+         | selectattr('enabled', 'equalto', true)
+         | selectattr('status', 'equalto', 'available')
+         | selectattr('name', 'in', ['get_system_information', 'read_file',
+             'list_files', 'list_directories', 'get_service_status', 'get_service_logs',
+             'get_journal_logs', 'read_log_file', 'list_services', 'get_process_info',
+             'list_processes', 'get_listening_ports', 'get_network_connections',
+             'get_network_interfaces', 'get_disk_usage', 'get_memory_information',
+             'get_cpu_information', 'get_hardware_information']) | list }}
+    _ao_github_tools: >-
+      {{ _ao_tool_catalogs.results[1].json.resources
+         | selectattr('enabled', 'equalto', true)
+         | selectattr('status', 'equalto', 'available')
+         | selectattr('name', 'in', ['get_commit', 'get_file_contents',
+             'pull_request_read', 'search_code', 'list_commits']) | list }}
+  changed_when: false
+
+- name: Require the tools used by the investigation harness
+  ansible.builtin.assert:
+    that:
+      - "['get_system_information', 'read_file'] | difference(_ao_linux_tools | map(attribute='name') | list) | length == 0"
+      - "['get_commit', 'get_file_contents', 'pull_request_read'] | difference(_ao_github_tools | map(attribute='name') | list) | length == 0"
+    fail_msg: Required read-only MCP tools are unavailable or disabled. Refresh the integrations before importing workflows.
+
+- name: Resolve explicit workflow tool selections
+  ansible.builtin.set_fact:
+    ao_linux_tool_ids: "{{ _ao_linux_tools | map(attribute='id') | list }}"
+    ao_github_tool_ids: "{{ _ao_github_tools | map(attribute='id') | list }}"
+    ao_readonly_tool_ids: "{{ (_ao_linux_tools + _ao_github_tools) | map(attribute='id') | list }}"
+  changed_when: false

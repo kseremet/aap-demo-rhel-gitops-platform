@@ -1,0 +1,23 @@
+---
+# Read-only provenance check used by both AO workflows before any success route.
+# Uses runtime trace data, never runs agent code or contacts hosts/GitHub.
+- name: Validate Automation Orchestrator diagnostic evidence # noqa: fqcn[keyword]
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Compare claimed evidence with successful runtime call results
+      ansible.builtin.set_fact:
+        _ao_evidence_validation: >-
+          {{ (ao_report | default({})) | ao_validate_evidence(
+             ao_evidence | default({}), ao_evidence_review | default({}),
+             demo_state_scm_url | default('')) }}
+      no_log: true
+
+    # Invalid evidence completes this read-only job with valid=false so AO can
+    # route to its blocked report. It never invokes the publication playbook.
+    - name: Return the deterministic evidence verdict to AO
+      ansible.builtin.set_stats:
+        data:
+          ao_evidence_validation: "{{ _ao_evidence_validation }}"
+        per_host: false

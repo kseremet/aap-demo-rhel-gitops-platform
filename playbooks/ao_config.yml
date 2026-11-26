@@ -352,6 +352,14 @@
         - ao
         - service_account
 
+    - name: Refresh SSH aliases for the managed in-cluster Linux MCP service
+      ansible.builtin.include_tasks: ao_refresh_mcp_hosts.yml
+      # Custom external MCP deployments manage their own host addressing.
+      when: >-
+        demo_ao_mcp_url is match('^http://linux-mcp-server\.'
+          ~ openshift_vm_namespace ~ '\.svc(?::[0-9]+)?/mcp$')
+      tags: [ao, integrations]
+
     - name: Create or reconcile AO project integrations and credentials
       ansible.builtin.include_tasks: ao_ensure_integration.yml
       loop: "{{ ao_integrations }}"
@@ -386,6 +394,10 @@
       tags:
         - ao
         - integrations
+
+    - name: Resolve project-owned read-only MCP tool selections
+      ansible.builtin.include_tasks: ao_ensure_tools.yml
+      tags: [ao, workflows, integrations]
 
     - name: Import or update the version-controlled AO workflows
       ansible.builtin.include_tasks: ao_import_workflow.yml

@@ -1,0 +1,96 @@
+---
+# VM pod-network addresses change after restarts. Refresh only the existing SSH
+# aliases in the managed Linux MCP ConfigMap; preserve policy and SSH identity.
+# This reads live VMIs and never rewrites the local generated inventory files.
+- name: Load the managed fleet VM specifications
+  ansible.builtin.include_vars:
+    file: "{{ playbook_dir }}/../group_vars/all/vm_specs.yml"
+
+- name: Read the existing Linux MCP SSH configuration
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: ConfigMap
+    name: linux-mcp-server-config
+    namespace: "{{ openshift_vm_namespace }}"
+    host: "{{ openshift_api_url }}"
+    api_key: "{{ vault_openshift_token }}"
+    validate_certs: "{{ openshift_validate_certs }}"
+  register: _ao_mcp_configmap
+  no_log: true
+
+- name: Require the managed Linux MCP configuration
+  ansible.builtin.assert:
+    that:
+      - _ao_mcp_configmap.resources | length == 1
+      - _ao_mcp_configmap.resources[0].data.config is defined
+    fail_msg: Deploy the managed Linux MCP service with setup/04_configure_ai_vm.yml before applying AO configuration.
+
+- name: Resolve the fleet aliases to refresh
+  ansible.builtin.set_fact:
+    _ao_mcp_ssh_config: "{{ _ao_mcp_configmap.resources[0].data.config }}"
+    _ao_mcp_fleet: >-
+      {{ (vm_specs | dict2items | rejectattr('value.fleet_managed', 'defined') | list)
+         + (vm_specs | dict2items | selectattr('value.fleet_managed', 'defined')
+            | selectattr('value.fleet_managed', 'equalto', true) | list) }}
+
+- name: Read current fleet VM addresses
+  kubevirt.core.kubevirt_vmi_info:
+    name: "{{ item.value.vm_name }}"
+    namespace: "{{ openshift_vm_namespace }}"
+    host: "{{ openshift_api_url }}"
+    api_key: "{{ vault_openshift_token }}"
+    validate_certs: "{{ openshift_validate_certs }}"
+  loop: "{{ _ao_mcp_fleet }}"
+  loop_control:
+    label: "{{ item.key }}"
+  register: _ao_mcp_vmis
+  no_log: true
+
+- name: Require running VMs and unambiguous existing SSH aliases
+  ansible.builtin.assert:
+    that:
+      - item.resources | length == 1
+      - item.resources[0].status.phase == 'Running'
+      - >-
+        (item.resources[0].status.interfaces | selectattr('name', 'equalto', 'default')
+         | selectattr('ipAddress', 'defined') | list | length) == 1
+      - (_ao_mcp_ssh_config | regex_findall(_alias_pattern) | length) == 1
+    fail_msg: A managed VM address or SSH alias is missing; refresh discovery and rerun the MCP setup playbook.
+  vars:
+    _alias_pattern: "(?m)^(Host {{ item.item.key | regex_escape }}\\n[ \\t]+HostName )[0-9a-fA-F:.]+$"
+  loop: "{{ _ao_mcp_vmis.results }}"
+  loop_control:
+    label: "{{ item.item.key }}"
+
+# Replace only the HostName address belonging to each existing alias. The
+# ConfigMap's policy.yaml, SSH user/key settings, and other aliases are untouched.
+- name: Update managed alias addresses from live VMIs
+  ansible.builtin.set_fact:
+    _ao_mcp_ssh_config: "{{ _ao_mcp_ssh_config | regex_replace(_alias_pattern, _replacement) }}"
+  vars:
+    _alias_pattern: "(?m)^(Host {{ item.item.key | regex_escape }}\\n[ \\t]+HostName )[0-9a-fA-F:.]+$"
+    _address: >-
+      {{ item.resources[0].status.interfaces | selectattr('name', 'equalto', 'default')
+         | map(attribute='ipAddress') | first }}
+    _replacement: "\\g<1>{{ _address }}"
+  loop: "{{ _ao_mcp_vmis.results }}"
+  loop_control:
+    label: "{{ item.item.key }}"
+
+- name: Refresh the managed Linux MCP SSH aliases
+  kubernetes.core.k8s:
+    state: patched
+    host: "{{ openshift_api_url }}"
+    api_key: "{{ vault_openshift_token }}"
+    validate_certs: "{{ openshift_validate_certs }}"
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: linux-mcp-server-config
+        namespace: "{{ openshift_vm_namespace }}"
+        resourceVersion: "{{ _ao_mcp_configmap.resources[0].metadata.resourceVersion }}"
+      data:
+        config: "{{ _ao_mcp_ssh_config }}"
+  when: _ao_mcp_ssh_config != _ao_mcp_configmap.resources[0].data.config
+  no_log: true

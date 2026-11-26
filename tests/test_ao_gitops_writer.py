@@ -33,6 +33,51 @@ UPDATED = ORIGINAL.replace("'1024'", "'65535'")
 PATH = "host_vars/web-01/kernel_settings.yml"
 
 
+def runtime_evidence(report):
+    def invocation(name, args, output):
+        return {
+            "id": name + "-invocation",
+            "result": {
+                "agent_trace": {
+                    "steps": [
+                        {
+                            "type": "tool_call",
+                            "call_id": "call-0",
+                            "tool_name": name,
+                            "tool_input": args,
+                        },
+                        {
+                            "type": "tool_result",
+                            "call_id": "call-0",
+                            "tool_name": name,
+                            "status": "success",
+                            "tool_output": output,
+                        },
+                    ]
+                }
+            },
+        }
+
+    return {
+        "commit": invocation(
+            "get_commit", {"owner": "example", "repo": "state"}, COMMIT
+        ),
+        "file": invocation(
+            "get_file_contents",
+            {"owner": "example", "repo": "state", "ref": COMMIT, "path": PATH},
+            "declared backlog 1024",
+        ),
+        "identity": invocation(
+            "get_system_information", {"host": "web-01"}, "hostname: web-01"
+        ),
+        "host": invocation(
+            "read_file",
+            {"host": "web-01", "path": "/proc/sys/net/core/somaxconn"},
+            "net.core.somaxconn=65535",
+        ),
+    }
+
+
 def blob(content):
     raw = content.encode()
     return hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
@@ -70,6 +115,8 @@ def handoff():
     report = dict(
         decision="ready",
         conclusion_status="confirmed",
+        blocking_findings=[],
+        resolved_findings=[],
         incident="Investigate web-01 policy mismatch.",
         target_host="web-01",
         repository_context=dict(
@@ -87,13 +134,15 @@ def handoff():
         evidence=[
             dict(
                 id="host-1",
-                tool="read_sysctl",
-                source="web-01",
+                tool="read_file",
+                tool_output_excerpt="net.core.somaxconn=65535",
+                source="web-01 /proc/sys/net/core/somaxconn",
                 observation="65535 observed",
             ),
             dict(
                 id="repo-1",
                 tool="get_file_contents",
+                tool_output_excerpt="declared backlog 1024",
                 source=PATH,
                 observation="1024 declared at the pinned commit",
             ),
@@ -260,7 +309,7 @@ def test_rendered_report_keeps_evidence_and_validation(handoff):
     body = MODULE.render_report(report, plan, review, "run-42")
     for value in [
         "## Evidence",
-        "read_sysctl",
+        "read_file",
         "get_file_contents",
         "65535",
         "1024",
@@ -394,6 +443,8 @@ def run_writer(
             ao_plan=plan,
             ao_report=report,
             ao_review=review,
+            ao_evidence=runtime_evidence(report),
+            ao_evidence_review={"blocking_findings": []},
             github_api_token="fake-offline-token",
             demo_state_scm_url=REPO,
             demo_ai_github_api_url=f"http://127.0.0.1:{server.server_port}",

@@ -168,6 +168,16 @@ controller_templates:
       aap_validate_certs: "{{ aap_validate_certs }}"
     credentials:
       - Automation Orchestrator Service Account
+  - name: JT - AO Evidence Validation
+    description: Validate diagnostic claims against successful AO runtime tool results without writes.
+    organization: "{{ demo_organization_name }}"
+    job_type: run
+    inventory: "{{ demo_ai_inventory_name }}"
+    project: "{{ demo_platform_project_name }}"
+    playbook: playbooks/ai/validate_ao_evidence.yml
+    ask_variables_on_launch: true
+    extra_vars:
+      demo_state_scm_url: "{{ demo_state_scm_url }}"
   - name: JT - AO GitOps Action
     description: Create or update a GitHub pull request from an AO structured plan.
     organization: "{{ demo_organization_name }}"
