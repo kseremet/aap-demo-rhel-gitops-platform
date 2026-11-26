@@ -54,6 +54,12 @@ gate requires approval and an empty blocker list. Do not replace these with raw
 `len(...)` calls: the backend supports them, but the current visual editor can
 serialize them into malformed nested variable references when saving.
 
+The diagnostic agent references the named loop output
+`evidence_loop.iteration_count` and the reviewer's original checklist, resolving
+only the check at that zero-based index. Avoid the `loop.index` / `loop.item`
+shorthand in saved prompts: the checked-out backend understands it, but the
+frontend variable-reference validator rejects `loop` as an unknown node.
+
 There is one diagnostic refinement cycle per run. Unresolved gaps do not start an
 unbounded retry loop or force a PR. Each agent step has a 1,200-second timeout and
 stops the branch on failure. The loop has an engine limit of five control turns:
@@ -186,7 +192,8 @@ workflow tests additionally validate importer substitutions against AO's schemas
 and resolve routing expressions using AO's actual evaluator. Without that optional
 checkout, those checks are skipped; writer tests and local graph/contract checks
 still run. With Node 24+ available, an additional check uses AO's actual visual
-expression parser and serializer to verify saved conditions retain their meaning.
+expression parser and serializer to verify saved conditions retain their meaning,
+and its frontend variable-reference validator to check every workflow parameter.
 
 For live validation, use the same incident wording and repository revision as the
 CrewAI comparison. Inspect every agent's final output and actual tool arguments /

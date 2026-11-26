@@ -35,6 +35,14 @@ Tracks testing progress for this demo. For procedural verification steps, see [s
 
 ## Latest local validation
 
+- 2026-11-26: Replaced frontend-rejected `loop.index` / `loop.item` references with
+  the named loop's iteration count and the original reviewer checklist. All 21
+  workflow checks passed, including AO's actual frontend variable-reference
+  validator, editor condition round-trips, and backend routing for zero/one/four
+  checks. A negative regression reproduces the reported unknown-loop alert.
+  Only follow-up prompts changed; schemas and loop routing are unchanged.
+  Live UI verification remains pending.
+
 - 2026-11-26: Replaced raw `len(...)` condition calls with visual-builder-compatible
   `exists` / `isEmpty` gates in both workflows. All 19 workflow checks passed,
   including real frontend parser/serializer round-trips followed by backend

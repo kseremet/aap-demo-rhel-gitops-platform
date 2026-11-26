@@ -587,9 +587,9 @@ nodes:
       Prefix evidence IDs with followup-<check index>- so parallel observations never collide.
       A missing tool or permission is an unanswered question, not proof of a hypothesis.
       Check index:
-      ${loop.index}
-      Requested check:
-      ${loop.item}
+      ${evidence_loop.iteration_count}
+      Requested checks (resolve only the check at the zero-based index above):
+      ${review_evidence.result.content.follow_up}
       Initial analysis:
       ${analyze_case.result.content}
       Request:

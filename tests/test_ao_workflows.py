@@ -197,6 +197,10 @@ def test_routing_and_loop_expression_resolution(
             if len(loop_results) < len(params["items"]):
                 assert len(loop_results) < params["max_iterations"]
                 resolver.set_namespace(
+                    current,
+                    {"iteration_count": len(loop_results), "iteration_results": None},
+                )
+                resolver.set_namespace(
                     "loop",
                     {
                         "evidence_loop": {
@@ -235,6 +239,9 @@ def test_routing_and_loop_expression_resolution(
             )
         else:
             params = resolver.resolve_dict(node["parameters"])
+            if current == "follow_up_check":
+                assert f"Check index:\n{len(loop_results)}\n" in params["prompt"]
+                assert f"Check {len(loop_results)}" in params["prompt"]
             if kind == "aap_job_template":
                 assert current == terminal
                 assert params["extra_vars"]["ao_report"]["decision"] == "ready"
@@ -358,3 +365,48 @@ def test_visual_editor_roundtrip_preserves_gate_semantics(path, tmp_path):
                     }
                 }
                 assert evaluate(condition, namespace) is (approved and not blockers)
+
+
+@pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.stem)
+def test_frontend_accepts_all_workflow_variable_references(path, tmp_path):
+    import shutil
+    import subprocess
+
+    if not SOURCES.exists():
+        pytest.skip("Optional workbench AO source checkout is absent")
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("Optional Node 24+ runtime is absent")
+    major = int(
+        subprocess.check_output([node, "--version"], text=True)
+        .strip()
+        .lstrip("v")
+        .split(".")[0]
+    )
+    if major < 24:
+        pytest.skip("Optional frontend validation check requires Node 24+")
+    source = (
+        SOURCES.parents[1] / "frontend/packages/syntara-ui/src/routes/builder/utils"
+    )
+    workflow = yaml.safe_load(path.read_text())
+    broken = deepcopy(workflow)
+    follow_up = next(n for n in broken["nodes"] if n["id"] == "follow_up_check")
+    follow_up["parameters"]["prompt"] += "\n${loop.index}\n${loop.item}"
+    completed = subprocess.run(
+        [
+            node,
+            str(ROOT / "tests/ao_variable_references.mjs"),
+            str(source),
+            str(tmp_path),
+        ],
+        input=json.dumps([workflow, broken]),
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    valid_errors, regression_errors = json.loads(completed.stdout)
+    assert valid_errors == []
+    assert any(
+        'node or trigger "loop" does not exist' in error["message"]
+        for error in regression_errors
+    )
