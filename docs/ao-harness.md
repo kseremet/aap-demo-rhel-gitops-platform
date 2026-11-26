@@ -384,3 +384,58 @@ Then run `ansible-playbook playbooks/casc.yml`. Other installations can leave
 `demo_ao_manage_script_nodes: false` (the default); HTTP preparation works with
 script execution disabled. `demo_ao_namespace` and `demo_ao_resource_name`
 identify the operator resource for configuring precise native HTTP access.
+
+## Reviewer checks, canonical citations, and publication authority
+
+The reviewer now distinguishes actionable checks from explicit access/authority
+limitations. `/review-checks` preserves all original findings and schedules a
+bounded attempt for any unanswered finding not explicitly marked unobtainable.
+It never treats a previous activity's spent four-call budget as a reason to skip
+the next activity. There are still at most four follow-up checks and four tool
+calls per activity, including packet retrieval. More findings remain blocking.
+Unknown historical provenance is not automatically a prerequisite to a separately
+justified policy decision; the reviewer should distinguish decision-critical gaps
+from limitations rather than requesting open-ended forensic proof.
+
+After the final agent, `/prepare-assessment` binds unchanged collector evidence
+IDs/tools/excerpts to unique successful runtime sources. This can correct a
+rewritten path or enrich a host-only source with its actual read path. It cannot
+repair invented excerpts, invent tool calls, resolve findings, or promote a
+rejected verdict. Unverified, ambiguous, or conflicting evidence remains blocked.
+It records canonicalized IDs and its validation result separately from the report.
+The AAP validator and writer independently repeat the checks before publication.
+
+Exact MCP text matching decodes top-level arrays of strings or text blocks,
+without joining blocks, changing whitespace, fuzzy matching, or searching nontext
+metadata. Evidence must still belong to the target host or pinned repository.
+Reviewer resolutions must quote original findings exactly and reference verified
+evidence IDs. A nonempty blocker list cannot become a confirmed/ready assessment.
+`verified_evidence_ids` now lists individually supported items even when `valid`
+is false; it does not override the publication gate.
+
+A proposed policy edit also needs `policy_basis`: `status`, `origin`, the exact
+`requirement`, and supporting `evidence_ids`. Request authority is established by
+a `policy_requirement` field or a named line in the original issue/event text:
+
+```text
+Policy requirement: Set net.core.somaxconn to 65535 for the web_servers group.
+```
+
+For a mock event, the equivalent explicit field is:
+
+```json
+"policy_requirement": "Set net.core.somaxconn to 65535 for the web_servers group."
+```
+
+Use this only if it is the intended policy. The generic comparison event asks to
+investigate a discrepancy; it does not establish that the observed runtime value
+should become desired policy. A separately verified repository requirement can
+also establish authority, but a commented configuration example cannot. With no
+established requirement, an edit is blocked; reconciliation of an already declared
+policy may instead justify a verified `no_change` outcome.
+
+The switch uses AO's supported `case_0` (ready), `case_1` (no change), and `default`
+(blocked) ports. The installed visual editor strips custom port names on save.
+Tests exercise the actual frontend conversion functions so all three branches
+survive an editor round-trip. `default` in the routing result means the blocked
+branch; it is not permission to publish.

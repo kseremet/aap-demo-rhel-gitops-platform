@@ -6,6 +6,7 @@ AO's trace recorder.
 """
 
 import hashlib
+import copy
 import json
 import re
 from urllib.parse import urlparse
@@ -117,8 +118,42 @@ def matches_output(excerpt, output):
     Models can return selected JSON fields with different spacing or a closing
     brace. Compare those fields structurally rather than accepting fuzzy prose.
     """
-    if not isinstance(excerpt, str) or not excerpt.strip():
+    if (
+        not isinstance(output, str)
+        or not isinstance(excerpt, str)
+        or not excerpt.strip()
+    ):
         return False
+    # AO serializes multi-block MCP text as a JSON array. Decode only the
+    # transport's text elements, never recursively search metadata or join blocks.
+    try:
+        transported = json.loads(output)
+    except (ValueError, TypeError):
+        transported = None
+    if (
+        isinstance(transported, list)
+        and transported
+        and (
+            all(isinstance(block, str) for block in transported)
+            or any(
+                isinstance(block, dict)
+                and block.get("type")
+                in {"text", "image", "audio", "resource", "resource_link"}
+                for block in transported
+            )
+        )
+    ):
+        texts = []
+        for block in transported:
+            if isinstance(block, str):
+                texts.append(block)
+            elif (
+                isinstance(block, dict)
+                and block.get("type") == "text"
+                and isinstance(block.get("text"), str)
+            ):
+                texts.append(block["text"])
+        return any(matches_output(excerpt, text) for text in texts if text != output)
     if (
         len(excerpt.strip()) >= 8 and excerpt in output
     ) or excerpt.strip() == output.strip():
@@ -138,6 +173,49 @@ def matches_output(excerpt, output):
         return json.dumps(left, sort_keys=True) == json.dumps(right, sort_keys=True)
 
     return isinstance(claimed, dict) and subset(claimed, actual)
+
+
+def collector_claims(packet):
+    """Read only actual collector handoffs, including the bounded loop outputs."""
+    claims = []
+    values = [packet.get(key) for key in ("investigate_host", "map_repository")]
+    loop = packet.get("follow_up")
+    if isinstance(loop, dict):
+        values.extend(loop.get("follow_up_check.result") or [])
+    for value in values:
+        if not isinstance(value, dict):
+            continue
+        result = value.get("result", value)
+        content = result.get("content") if isinstance(result, dict) else None
+        if isinstance(content, dict) and isinstance(content.get("evidence"), list):
+            claims.extend(
+                item
+                for item in content["evidence"]
+                if isinstance(item, dict) and isinstance(item.get("id"), str)
+            )
+    return {item["id"]: item for item in claims}
+
+
+def request_policy_requirements(request):
+    """Recognize named operator directives, never infer policy from symptoms."""
+    if not isinstance(request, dict):
+        return []
+    requirements = []
+    if isinstance(request.get("policy_requirement"), str):
+        requirements.append(request["policy_requirement"])
+    # A named line also survives the normal issue/comment-to-event bridge.
+    for key in ("description", "body", "comment_body", "comment"):
+        text = request.get(key)
+        if isinstance(text, dict):
+            text = text.get("body")
+        if isinstance(text, str):
+            requirements.extend(
+                match.group(1).strip()
+                for match in re.finditer(
+                    r"(?im)^\s*(?:\*\*)?Policy requirement(?:\*\*)?:\s*(.+)$", text
+                )
+            )
+    return requirements
 
 
 def validate_evidence(report, packet, review, repository_url):
@@ -203,6 +281,10 @@ def validate_evidence(report, packet, review, repository_url):
     evidence = report.get("evidence")
     evidence = evidence if isinstance(evidence, list) else []
     ids = set()
+    verified_ids = set()
+    # Preserve collector citations across assessment. The collector prose itself
+    # is not proof: every item must still match a scoped runtime result below.
+    originals = collector_claims(packet)
     host_supported = repo_supported = False
     for item in evidence:
         if not isinstance(item, dict):
@@ -218,16 +300,46 @@ def validate_evidence(report, packet, review, repository_url):
             r
             for r in records
             if r["tool"] == str(item.get("tool", "")).removeprefix("functions.")
+            and (
+                r in host_records
+                or r in pinned_reads
+                or (
+                    r in repo_records
+                    and r["tool"]
+                    in {
+                        "get_commit",
+                        "pull_request_read",
+                        "list_commits",
+                        "search_code",
+                    }
+                )
+            )
             and matches_output(excerpt, r["output"])
             and (
                 r["tool"] not in {"read_file", "get_file_contents"}
                 or (
                     isinstance(r["input"].get("path"), str)
                     and bool(r["input"]["path"])
-                    and r["input"]["path"] in str(item.get("source", ""))
+                    and re.search(
+                        r"(?<![A-Za-z0-9_.-])"
+                        + re.escape(r["input"]["path"])
+                        + r"(?=$|[@#:\s])",
+                        str(item.get("source", "")),
+                    )
                 )
             )
         ]
+        original = originals.get(identifier)
+        if original and any(
+            item.get(field) != original.get(field)
+            for field in ("tool", "tool_output_excerpt")
+        ):
+            blockers.append(
+                f"{identifier}: collector citation changed; preserve its tool and excerpt exactly."
+            )
+            matches = []
+        if matches:
+            verified_ids.add(identifier)
         if not matches:
             blockers.append(
                 f"{identifier}: no matching successful runtime tool result/excerpt."
@@ -255,18 +367,151 @@ def validate_evidence(report, packet, review, repository_url):
                 isinstance(finding, str)
                 and isinstance(refs, list)
                 and refs
-                and all(isinstance(ref, str) and ref in ids for ref in refs)
+                and all(isinstance(ref, str) and ref in verified_ids for ref in refs)
             ):
-                covered.add(finding)
+                if finding not in findings:
+                    blockers.append(
+                        "A resolution does not name an exact reviewer finding."
+                    )
+                else:
+                    covered.add(finding)
         if any(not isinstance(f, str) or f not in covered for f in findings):
             blockers.append(
                 "A reviewer blocker lacks an explicit evidence-backed resolution."
+            )
+    # Desired policy must have an authority separate from the observed runtime
+    # or an inactive example. Requests may carry a named policy_requirement;
+    # repository requirements must quote independently verified file evidence.
+    if report.get("decision") == "ready":
+        basis = report.get("policy_basis") or {}
+        quote = basis.get("requirement") if isinstance(basis, dict) else None
+        established = (
+            isinstance(quote, str)
+            and bool(quote.strip())
+            and basis.get("status") == "established"
+        )
+        if established and basis.get("origin") == "request":
+            request = packet.get("request") or {}
+            established = quote in request_policy_requirements(request)
+        elif established and basis.get("origin") == "repository":
+            refs = basis.get("evidence_ids")
+            established = (
+                isinstance(refs, list)
+                and bool(refs)
+                and all(ref in verified_ids for ref in refs)
+            )
+            cited = [
+                item
+                for item in evidence
+                if isinstance(item, dict) and item.get("id") in (refs or [])
+            ]
+            # A commented YAML example does not establish an active requirement.
+            established = established and any(
+                matches_output(quote, item.get("tool_output_excerpt", ""))
+                and not all(
+                    line.strip() in ("", "---", "...") or line.lstrip().startswith("#")
+                    for line in quote.splitlines()
+                )
+                and item.get("tool") == "get_file_contents"
+                for item in cited
+            )
+        else:
+            established = False
+        if not established:
+            blockers.append(
+                "A GitOps edit requires an explicit request policy_requirement or a verified repository policy requirement; runtime values and commented examples are insufficient."
             )
     return {
         "valid": not blockers,
         "blocking_findings": blockers,
         "successful_tool_results": len(records),
-        "verified_evidence_ids": sorted(ids) if not blockers else [],
+        "verified_evidence_ids": sorted(verified_ids),
+    }
+
+
+def normalize_assessment(report, packet, review, repository_url):
+    """Bind unchanged collector evidence to real sources; only restrict verdicts.
+
+    This is formatting and fail-closed packaging, never a new diagnosis. AAP
+    independently repeats the complete provenance/policy/blocker validation.
+    """
+    result = copy.deepcopy(report)
+    if not isinstance(result, dict):
+        raise ValueError("Assessment must be an object")
+    originals = collector_claims(packet)
+    records = successful_results(packet)
+    context = result.get("repository_context") or {}
+    repaired = []
+    for item in result.get("evidence", []):
+        if not isinstance(item, dict):
+            continue
+        original = originals.get(item.get("id"))
+        if not original or any(
+            original.get(k) != item.get(k) for k in ("tool", "tool_output_excerpt")
+        ):
+            continue
+        sources = set()
+        for record in records:
+            args = record["input"]
+            if record["tool"] != item.get("tool") or not matches_output(
+                item.get("tool_output_excerpt"), record["output"]
+            ):
+                continue
+            if record["tool"] in LINUX_TOOLS and args.get("host") == result.get(
+                "target_host"
+            ):
+                sources.add(
+                    "host:"
+                    + args["host"]
+                    + (
+                        (":" + args["path"])
+                        if isinstance(args.get("path"), str)
+                        else ""
+                    )
+                )
+            elif (
+                record["tool"] == "get_file_contents"
+                and args.get("owner") == context.get("owner")
+                and args.get("repo") == context.get("repository")
+                and context.get("read_commit")
+                and any(args.get(k) == context["read_commit"] for k in ("sha", "ref"))
+                and all(
+                    args.get(k) in (None, "", context["read_commit"])
+                    for k in ("sha", "ref")
+                )
+                and isinstance(args.get("path"), str)
+            ):
+                sources.add(
+                    f"repo://{args['owner']}/{args['repo']}@{context['read_commit']}/{args['path']}"
+                )
+        if len(sources) == 1:
+            source = sources.pop()
+            if item.get("source") != source:
+                item["source"] = source
+                repaired.append(item["id"])
+    verdict = validate_evidence(result, packet, review, repository_url)
+    if not verdict["valid"]:
+        remaining = list(result.get("blocking_findings") or [])
+        resolutions = result.get("resolved_findings") or []
+        covered = {
+            r.get("finding")
+            for r in resolutions
+            if isinstance(r, dict)
+            and r.get("evidence_ids")
+            and all(e in verdict["verified_evidence_ids"] for e in r["evidence_ids"])
+        }
+        for finding in review.get("blocking_findings", []):
+            if finding not in covered and finding not in remaining:
+                remaining.append(finding)
+        remaining += [f for f in verdict["blocking_findings"] if f not in remaining]
+        result["blocking_findings"] = remaining
+        result["decision"] = "blocked"
+        if result.get("conclusion_status") == "confirmed":
+            result["conclusion_status"] = "hypothesis"
+    return {
+        "report": result,
+        "validation": verdict,
+        "canonicalized_evidence_ids": repaired,
     }
 
 

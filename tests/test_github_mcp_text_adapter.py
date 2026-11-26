@@ -14,6 +14,7 @@ import pytest
 
 SOURCE = Path(__file__).parents[1] / "files/ao/github_mcp_text_adapter.py"
 sys.path.insert(0, str(SOURCE.parent))
+sys.path.insert(0, str(SOURCE.parents[2] / "playbooks/ai/filter_plugins"))
 spec = importlib.util.spec_from_file_location("github_mcp_text_adapter", SOURCE)
 adapter = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(adapter)

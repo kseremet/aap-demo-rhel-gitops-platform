@@ -262,3 +262,136 @@ def test_reading_a_handoff_is_never_independent_evidence(handoff):
         }
     )
     assert not verdict(report, packet)["valid"]
+
+
+@pytest.mark.parametrize(
+    "blocks",
+    [
+        ["downloaded", 'line one\nexact quoted "value"\nline three'],
+        [
+            {"type": "text", "text": "downloaded"},
+            {"type": "text", "text": 'line one\nexact quoted "value"\nline three'},
+        ],
+    ],
+)
+def test_exact_mcp_text_transport_is_decoded(blocks):
+    import json
+
+    assert MODULE.matches_output('line one\nexact quoted "value"', json.dumps(blocks))
+    assert not MODULE.matches_output(
+        'line one exact quoted "value"', json.dumps(blocks)
+    )
+    assert not MODULE.matches_output("downloadedline one", json.dumps(blocks))
+    assert not MODULE.matches_output(
+        "secret metadata", json.dumps([{"type": "image", "text": "secret metadata"}])
+    )
+
+
+def test_partial_verified_ids_do_not_make_a_blocked_report_valid(handoff):
+    report = handoff[1]
+    packet = runtime_evidence(report)
+    report["blocking_findings"] = ["Unresolved"]
+    result = verdict(report, packet)
+    assert not result["valid"]
+    assert result["verified_evidence_ids"] == ["host-1", "repo-1"]
+
+
+def test_resolution_must_name_original_finding_and_verified_ids(handoff):
+    report = handoff[1]
+    packet = runtime_evidence(report)
+    review = {"blocking_findings": ["Check declared policy"]}
+    report["resolved_findings"] = [
+        {"finding": "Confirmed an observation", "evidence_ids": ["repo-1"]}
+    ]
+    assert not verdict(report, packet, review)["valid"]
+    report["resolved_findings"][0]["finding"] = "Check declared policy"
+    assert verdict(report, packet, review)["valid"]
+    report["evidence"][1]["source"] = "wrong/file.yml"
+    assert not verdict(report, packet, review)["valid"]
+
+
+def test_observed_runtime_is_not_authority_for_a_policy_edit(handoff):
+    report = handoff[1]
+    packet = runtime_evidence(report)
+    packet["request"] = {
+        "description": "Investigate a possible mismatch and propose remediation."
+    }
+    assert not verdict(report, packet)["valid"]
+    report["policy_basis"]["origin"] = "repository"
+    report["policy_basis"]["evidence_ids"] = ["repo-1"]
+    report["policy_basis"]["requirement"] = "# value: 65535"
+    assert not verdict(report, packet)["valid"]
+
+
+def test_canonical_packaging_repairs_only_unchanged_verified_collector_claims(handoff):
+    from copy import deepcopy
+
+    report = handoff[1]
+    packet = runtime_evidence(report)
+    packet["map_repository"] = {
+        "result": {"content": {"evidence": [deepcopy(report["evidence"][1])]}}
+    }
+    report["evidence"][1]["source"] = "invented.yml"
+    out = MODULE.normalize_assessment(report, packet, {"blocking_findings": []}, REPO)
+    assert out["validation"]["valid"]
+    assert out["report"]["decision"] == "ready"
+    assert out["report"]["evidence"][1]["source"].endswith(
+        "/host_vars/web-01/kernel_settings.yml"
+    )
+    assert report["evidence"][1]["source"] == "invented.yml"  # immutable input
+    report["evidence"][1]["tool_output_excerpt"] = "invented statement"
+    out = MODULE.normalize_assessment(report, packet, {"blocking_findings": []}, REPO)
+    assert out["report"]["decision"] == "blocked"
+    assert out["report"]["conclusion_status"] != "confirmed"
+
+
+def test_packaging_cannot_resolve_reviewer_blockers_by_relabeling_observations(handoff):
+    report = handoff[1]
+    packet = runtime_evidence(report)
+    review = {"blocking_findings": ["Unverified overlay"]}
+    report["resolved_findings"] = [
+        {"finding": "Runtime is known", "evidence_ids": ["host-1"]}
+    ]
+    out = MODULE.normalize_assessment(report, packet, review, REPO)
+    assert out["report"]["decision"] == "blocked"
+    assert "Unverified overlay" in out["report"]["blocking_findings"]
+
+
+def test_explicit_issue_policy_directive_survives_the_event_bridge(handoff):
+    report = handoff[1]
+    packet = runtime_evidence(report)
+    requirement = report["policy_basis"]["requirement"]
+    packet["request"] = {
+        "description": "Investigate the observed mismatch.\nPolicy requirement: "
+        + requirement
+    }
+    assert verdict(report, packet)["valid"]
+    packet["request"][
+        "description"
+    ] = "The runtime happens to be 65535. Please investigate."
+    assert not verdict(report, packet)["valid"]
+
+
+def test_verified_no_change_does_not_need_authority_for_a_new_policy(handoff):
+    report = handoff[1]
+    packet = runtime_evidence(report)
+    report["decision"] = "no_change"
+    report["policy_basis"] = {
+        "status": "unknown",
+        "origin": "unknown",
+        "requirement": "",
+        "evidence_ids": [],
+    }
+    packet["request"] = {
+        "description": "Explain the existing policy; do not revise the PR."
+    }
+    assert verdict(report, packet)["valid"]
+
+
+def test_domain_json_arrays_are_not_mistaken_for_mcp_transport_blocks():
+    import json
+
+    output = json.dumps([{"name": "verified process", "pid": 1234}])
+    assert MODULE.matches_output(output, output)
+    assert MODULE.matches_output("verified process", output)
+    assert MODULE.matches_output("[]", "[]")

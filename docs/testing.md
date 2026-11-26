@@ -37,6 +37,24 @@ Tracks testing progress for this demo. For procedural verification steps, see [s
 
 ## Latest local validation
 
+- 2026-11-26: Reviewed blocked run `b8a1cb84-24e5-4916-913d-c15cf246ba9f`.
+  Repository excerpts were present in decoded MCP text arrays, but the validator
+  compared escaped JSON; final assessment also rewrote paths, left unresolved
+  findings while claiming ready/confirmed, and omitted reviewer follow-ups.
+  Added exact text-block decoding, verified-ID reporting, canonical citation
+  binding, strict exact-finding resolutions and explicit policy authority.
+  Added deterministic bounded review scheduling and fail-closed final packaging
+  to both workflows. Switched branch ports to frontend-supported case_0/case_1/
+  default and tested the actual editor port conversions. AAP publication gates
+  remain mandatory. Native AO probe `4cdb68b7-7baa-404f-9092-acdadebb8981`
+  scheduled three checks, verified all six saved evidence items, retained the
+  unresolved/unsupported proposal as blocked, and completed the blocked marker
+  via the default port; ready/no-change markers stayed skipped. It contained
+  no model, managed-host, AAP or publication jobs and was removed afterward.
+  The 165-test full suite passed; focused transport/domain-array checks passed
+  after the final decoder refinement. CasC syntax, focused lint and formatting
+  checks passed. Full live incident-to-PR/feedback status remains Partial.
+
 - 2026-11-26: Final-assessment preparation in execution
   `81c2f3b2-547e-4d50-bff1-39f300ef6b85` exceeded the initial invocation limit:
   the complete compact prompt was 13,904 characters. AO masked the script's

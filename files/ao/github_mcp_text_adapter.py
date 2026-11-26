@@ -9,6 +9,8 @@ is never stored or logged. Only the demo's five read-only GitHub tools and local
 import copy
 from handoff_packets import HANDOFF_TOOL, PacketStore
 from prepare_agent_prompt import prepare_prompt
+from review_checks import prepare_review
+from ao_evidence import normalize_assessment
 import http.client
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -228,7 +230,12 @@ class AdapterHandler(BaseHTTPRequestHandler):
         self.send_body(405, headers={"Allow": "POST"})
 
     def do_POST(self):
-        if self.path in ("/handoffs", "/prepare-prompt"):
+        if self.path in (
+            "/handoffs",
+            "/prepare-prompt",
+            "/review-checks",
+            "/prepare-assessment",
+        ):
             # Internal, bounded JSON storage only. No bearer or host credential
             # is needed or forwarded; the returned random ID grants read access.
             try:
@@ -246,7 +253,25 @@ class AdapterHandler(BaseHTTPRequestHandler):
                 data = json.loads(self.rfile.read(length))
                 if not isinstance(data, dict):
                     raise ValueError("Handoff request must be an object")
-                if self.path == "/prepare-prompt":
+                if self.path == "/prepare-assessment":
+                    if set(data) != {"report", "packet", "review", "repository_url"}:
+                        raise ValueError(
+                            "Assessment preparation requires report, packet, review and repository_url"
+                        )
+                    self.send_json(
+                        200,
+                        normalize_assessment(
+                            data["report"],
+                            data["packet"],
+                            data["review"],
+                            data["repository_url"],
+                        ),
+                    )
+                elif self.path == "/review-checks":
+                    if set(data) != {"review"}:
+                        raise ValueError("Review preparation requires only review")
+                    self.send_json(200, prepare_review(data["review"]))
+                elif self.path == "/prepare-prompt":
                     if (
                         set(data) != {"template", "contexts", "stage"}
                         or not isinstance(data["template"], str)

@@ -28,6 +28,7 @@ MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
 COMMIT = "a" * 40
 REPO = "https://github.com/example/state.git"
+POLICY_REQUIREMENT = "Set net.core.somaxconn to 65535 on web-01 only."
 ORIGINAL = "---\n# Preserve this policy comment.\nkernel_settings_host:\n  backlog:\n    name: net.core.somaxconn\n    value: '1024'\n  swappiness:\n    name: vm.swappiness\n    value: '10'\n"
 UPDATED = ORIGINAL.replace("'1024'", "'65535'")
 PATH = "host_vars/web-01/kernel_settings.yml"
@@ -59,6 +60,7 @@ def runtime_evidence(report):
         }
 
     return {
+        "request": {"policy_requirement": POLICY_REQUIREMENT},
         "commit": invocation(
             "get_commit", {"owner": "example", "repo": "state"}, COMMIT
         ),
@@ -114,6 +116,12 @@ def handoff():
     )
     report = dict(
         decision="ready",
+        policy_basis=dict(
+            status="established",
+            origin="request",
+            requirement=POLICY_REQUIREMENT,
+            evidence_ids=[],
+        ),
         conclusion_status="confirmed",
         blocking_findings=[],
         resolved_findings=[],

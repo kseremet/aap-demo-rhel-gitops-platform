@@ -142,3 +142,14 @@ a single adapter replica so upload and retrieval use the same memory store. This
 is transient demo context transport, not a persistent artifact store. The existing
 cleanup playbook removes the adapter and its source ConfigMap, including packet
 support. AAP retains the original runtime traces for independent validation.
+
+## Deterministic review and report helpers
+
+The same internal, fixed-code HTTP service also provides `/review-checks` and
+`/prepare-assessment`. The former schedules at most four unanswered reviewer
+checks without deleting blockers; the latter binds unchanged evidence to real
+runtime sources and fails closed on unsupported policy or unresolved findings.
+Neither endpoint runs agent-provided code or contacts managed hosts/GitHub.
+The source ConfigMap contains the same pure provenance module used by the AAP
+validator. AAP independently validates again before any publication. See
+[the harness contracts](ao-harness.md#reviewer-checks-canonical-citations-and-publication-authority).

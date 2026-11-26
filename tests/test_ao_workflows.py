@@ -280,6 +280,21 @@ def test_routing_and_loop_expression_resolution(
             )
         else:
             params = resolver.resolve_dict(node["parameters"])
+            if kind == "http_request" and current == "prepare_review":
+                normalize = runpy.run_path(str(ROOT / "files/ao/review_checks.py"))[
+                    "prepare_review"
+                ]
+                resolver.set_namespace(
+                    current, {"result": {"body": normalize(params["body"]["review"])}}
+                )
+                current = outgoing[current][0]["to"]
+                continue
+            if kind == "http_request" and current == "prepare_assessment":
+                resolver.set_namespace(
+                    current, {"result": {"body": {"report": params["body"]["report"]}}}
+                )
+                current = outgoing[current][0]["to"]
+                continue
             if kind == "http_request":
                 env = params["body"]
                 prepare = runpy.run_path(
@@ -317,8 +332,10 @@ def test_routing_and_loop_expression_resolution(
                 break
             result = example(params["response_schema"])
             if current == "review_evidence":
+                result["blocking_findings"] = [f"Check {i}" for i in range(checks)]
                 result["follow_up"] = [
                     dict(
+                        finding=f"Check {i}",
                         question=f"Check {i}",
                         reason="Missing observation",
                         success_criterion="Source-attributed result",
@@ -364,7 +381,7 @@ def test_diagnostic_budget_is_enforced_before_the_loop():
         gate = next(n for n in workflow["nodes"] if n["id"] == "limit_checks")
         for count, allowed in [(0, True), (4, True), (5, False)]:
             namespace = {
-                "review_evidence": {"result": {"content": {"follow_up": [{}] * count}}}
+                "prepare_review": {"result": {"body": {"follow_up": [{}] * count}}}
             }
             assert evaluate(gate["parameters"]["condition"], namespace) is allowed
 
@@ -418,9 +435,7 @@ def test_visual_editor_roundtrip_preserves_gate_semantics(path, tmp_path):
         if gate == "limit_checks":
             for count in [0, 1, 4, 5, 6]:
                 namespace = {
-                    "review_evidence": {
-                        "result": {"content": {"follow_up": [{}] * count}}
-                    }
+                    "prepare_review": {"result": {"body": {"follow_up": [{}] * count}}}
                 }
                 assert evaluate(condition, namespace) is (count <= 4)
         elif gate == "approve_plan":
@@ -519,7 +534,7 @@ def test_neither_success_route_can_bypass_evidence_validation(path, decision):
     case = next(
         c
         for c in nodes["route_assessment"]["parameters"]["cases"]
-        if c["port"] == decision
+        if c["port"] == {"ready": "case_0", "no_change": "case_1"}[decision]
     )
     for verified, certainty, blockers, allowed in [
         (True, "confirmed", [], True),
@@ -531,14 +546,40 @@ def test_neither_success_route_can_bypass_evidence_validation(path, decision):
             "validate_evidence": {
                 "artifacts": {"ao_evidence_validation": {"valid": verified}}
             },
-            "final_assessment": {
+            "prepare_assessment": {
                 "result": {
-                    "content": {
-                        "decision": decision,
-                        "conclusion_status": certainty,
-                        "blocking_findings": blockers,
+                    "body": {
+                        "report": {
+                            "decision": decision,
+                            "conclusion_status": certainty,
+                            "blocking_findings": blockers,
+                        }
                     }
                 }
             },
         }
         assert evaluate(case["condition"], ns) is allowed
+
+
+def test_visual_editor_preserves_all_switch_branch_ports(tmp_path):
+    import shutil, subprocess
+
+    node = shutil.which("node")
+    if not node or not SOURCES.exists():
+        pytest.skip("Node and optional AO source required")
+    source = (
+        SOURCES.parents[1] / "frontend/packages/syntara-ui/src/routes/builder/utils"
+    )
+    definitions = [yaml.safe_load(p.read_text()) for p in WORKFLOWS]
+    completed = subprocess.run(
+        [node, str(ROOT / "tests/ao_edge_roundtrip.mjs"), str(source), str(tmp_path)],
+        input=json.dumps(definitions),
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    for definition, result in zip(definitions, json.loads(completed.stdout)):
+        for before, after in zip(definition["edges"], result["edges"]):
+            if before["from"] == "route_assessment":
+                assert before == after
+        assert result["invalidNamedPorts"] == [None, None, None]

@@ -48,6 +48,16 @@ nodes:
         Use concise handoffs: avoid duplicated narrative and full-file quotations. Preserve
         all blockers and cite the shortest exact excerpt supporting each observation;
         the full runtime results remain available to the independent AAP validator.
+
+        This activity has a FRESH budget of four tool calls, independent of earlier
+        activities. A read_handoff call counts only in this activity. Reuse existing
+        observations; spend remaining calls on unresolved facts, never claim a prior
+        activity exhausted your budget. Preserve collector evidence IDs, tools, exact
+        source paths and excerpts verbatim; never shorten or reconstruct citations.
+
+        Extract the operator request without inventing requirements. Investigating a
+        mismatch does not authorize adopting the runtime value. Carry an explicit
+        policy_requirement field unchanged when present in the event.
       contexts:
       - ${trigger}
       stage: scope_request
@@ -182,6 +192,12 @@ nodes:
         Use concise handoffs: avoid duplicated narrative and full-file quotations. Preserve
         all blockers and cite the shortest exact excerpt supporting each observation;
         the full runtime results remain available to the independent AAP validator.
+
+        This activity has a FRESH budget of four tool calls, independent of earlier
+        activities. A read_handoff call counts only in this activity. Reuse existing
+        observations; spend remaining calls on unresolved facts, never claim a prior
+        activity exhausted your budget. Preserve collector evidence IDs, tools, exact
+        source paths and excerpts verbatim; never shorten or reconstruct citations.
       contexts:
       - ${scope_request.result.content}
       - ${trigger}
@@ -222,6 +238,8 @@ nodes:
                 type: string
               source:
                 type: string
+                description: Exact canonical collector source. Preserve source, tool, excerpt and evidence
+                  ID unchanged in every later handoff.
               observation:
                 type: string
               tool_output_excerpt:
@@ -295,6 +313,12 @@ nodes:
         Use concise handoffs: avoid duplicated narrative and full-file quotations. Preserve
         all blockers and cite the shortest exact excerpt supporting each observation;
         the full runtime results remain available to the independent AAP validator.
+
+        This activity has a FRESH budget of four tool calls, independent of earlier
+        activities. A read_handoff call counts only in this activity. Reuse existing
+        observations; spend remaining calls on unresolved facts, never claim a prior
+        activity exhausted your budget. Preserve collector evidence IDs, tools, exact
+        source paths and excerpts verbatim; never shorten or reconstruct citations.
       contexts:
       - ${scope_request.result.content}
       - ${investigate_host.result.content}
@@ -333,6 +357,8 @@ nodes:
                 type: string
               source:
                 type: string
+                description: Exact canonical collector source. Preserve source, tool, excerpt and evidence
+                  ID unchanged in every later handoff.
               observation:
                 type: string
               tool_output_excerpt:
@@ -411,6 +437,21 @@ nodes:
         Use concise handoffs: avoid duplicated narrative and full-file quotations. Preserve
         all blockers and cite the shortest exact excerpt supporting each observation;
         the full runtime results remain available to the independent AAP validator.
+
+        This activity has a FRESH budget of four tool calls, independent of earlier
+        activities. A read_handoff call counts only in this activity. Reuse existing
+        observations; spend remaining calls on unresolved facts, never claim a prior
+        activity exhausted your budget. Preserve collector evidence IDs, tools, exact
+        source paths and excerpts verbatim; never shorten or reconstruct citations.
+
+        State policy_basis: established/unknown, request/repository/unknown, exact
+        requirement and supporting evidence IDs. For request authority, quote the original
+        event policy_requirement (or named Policy requirement: line) exactly; a generic investigation request is insufficient.
+        For repository authority, quote an actual verified requirement and cite its evidence
+        IDs. A runtime value or a commented configuration example is not authority to
+        change policy. If an edit's desired policy is unresolved, keep decision=blocked and certainty
+        unconfirmed; do not silently choose the observed value. Existing declared policy
+        may instead require reconciliation without a Git edit.
       contexts:
       - ${scope_request.result.content}
       - ${investigate_host.result.content}
@@ -519,6 +560,8 @@ nodes:
                 type: string
               source:
                 type: string
+                description: Exact canonical collector source. Preserve source, tool, excerpt and evidence
+                  ID unchanged in every later handoff.
               observation:
                 type: string
               tool_output_excerpt:
@@ -543,6 +586,32 @@ nodes:
           type: array
           items:
             type: string
+        policy_basis:
+          type: object
+          additionalProperties: false
+          properties:
+            status:
+              type: string
+              enum:
+              - established
+              - unknown
+            origin:
+              type: string
+              enum:
+              - request
+              - repository
+              - unknown
+            requirement:
+              type: string
+            evidence_ids:
+              type: array
+              items:
+                type: string
+          required:
+          - status
+          - origin
+          - requirement
+          - evidence_ids
       required:
       - decision
       - conclusion_status
@@ -557,6 +626,7 @@ nodes:
       - alternatives
       - validation_plan
       - limitations
+      - policy_basis
     prompt: ${handoff_analyze_case.result.body.prompt}
     tool_selections:
     - __AO_READONLY_TOOL_IDS__
@@ -614,6 +684,23 @@ nodes:
         Check inventory, overlays, or other retrievable evidence instead of leaving these
         as unexplored blockers with follow_up=[]. Unobtainable gaps remain blocking even
         when no follow-up can resolve them.
+
+        This activity has a FRESH budget of four tool calls, independent of earlier
+        activities. A read_handoff call counts only in this activity. Reuse existing
+        observations; spend remaining calls on unresolved facts, never claim a prior
+        activity exhausted your budget. Preserve collector evidence IDs, tools, exact
+        source paths and excerpts verbatim; never shorten or reconstruct citations.
+
+        For each blocking finding, attach its exact text to a follow_up.finding.
+        Retrieve sysctl.d, inventory, precedence or policy artifacts when accessible.
+        Use unobtainable_findings only for an actual access/authority limitation, with
+        the exact finding and reason. A prior four-call budget is never such a limitation.
+        The deterministic scheduler will attempt unanswered gaps within the four-check cap.
+
+        Only block facts necessary for the chosen decision. Do not demand historical
+        attribution of a runtime change as a prerequisite to a separately justified
+        policy edit or documented reconciliation. Record unrelated historical unknowns
+        as limitations, without pretending their causes were discovered.
       contexts:
       - ${analyze_case.result.content}
       - ${scope_request.result.content}
@@ -658,32 +745,65 @@ nodes:
                 type: string
               success_criterion:
                 type: string
+              finding:
+                type: string
+                description: Exact blocking finding this check addresses.
             required:
             - question
             - reason
             - success_criterion
+            - finding
           maxItems: 4
+        unobtainable_findings:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            properties:
+              finding:
+                type: string
+              reason:
+                type: string
+            required:
+            - finding
+            - reason
       required:
       - summary
       - blocking_findings
       - follow_up
+      - unobtainable_findings
     prompt: ${handoff_review_evidence.result.body.prompt}
     tool_selections:
     - __AO_READONLY_TOOL_IDS__
   settings:
     timeout: 1200
     continue_on_failure: false
+- id: prepare_review
+  type: http_request
+  name: Schedule bounded attempts for unresolved reviewer findings
+  parameters:
+    method: POST
+    url: __AO_REVIEW_CHECKS_URL__
+    headers:
+      Content-Type: application/json
+    body:
+      review: ${review_evidence.result.content}
+  outputs:
+    result: ${result}
+  settings:
+    timeout: 30
+    continue_on_failure: false
 - id: limit_checks
   type: condition
   name: Enforce the four-check diagnostic budget
   parameters:
-    condition: not (${review_evidence.result.content.follow_up[4]} exists)
+    condition: not (${prepare_review.result.body.follow_up[4]} exists)
 - id: evidence_loop
   type: loop
   name: Collect requested missing evidence (up to four checks)
   parameters:
     type: for_each
-    items: ${review_evidence.result.content.follow_up}
+    items: ${prepare_review.result.body.follow_up}
     max_iterations: 5
   settings:
     continue_on_failure: false
@@ -734,9 +854,15 @@ nodes:
         Use concise handoffs: avoid duplicated narrative and full-file quotations. Preserve
         all blockers and cite the shortest exact excerpt supporting each observation;
         the full runtime results remain available to the independent AAP validator.
+
+        This activity has a FRESH budget of four tool calls, independent of earlier
+        activities. A read_handoff call counts only in this activity. Reuse existing
+        observations; spend remaining calls on unresolved facts, never claim a prior
+        activity exhausted your budget. Preserve collector evidence IDs, tools, exact
+        source paths and excerpts verbatim; never shorten or reconstruct citations.
       contexts:
       - ${evidence_loop.iteration_count}
-      - ${review_evidence.result.content.follow_up}
+      - ${prepare_review.result.body.follow_up}
       - ${analyze_case.result.content}
       - ${scope_request.result.content}
       stage: follow_up_check
@@ -776,6 +902,8 @@ nodes:
                 type: string
               source:
                 type: string
+                description: Exact canonical collector source. Preserve source, tool, excerpt and evidence
+                  ID unchanged in every later handoff.
               observation:
                 type: string
               tool_output_excerpt:
@@ -842,9 +970,29 @@ nodes:
         ellipses or invented values. Scalars must be complete; unchanged JSON fields
         are valid excerpts. Use actual callable names without functions. prefixes.
         Failed calls and agent narrative are not evidence. Use the configured response schema.
+
+        This activity has a FRESH budget of four tool calls, independent of earlier
+        activities. A read_handoff call counts only in this activity. Reuse existing
+        observations; spend remaining calls on unresolved facts, never claim a prior
+        activity exhausted your budget. Preserve collector evidence IDs, tools, exact
+        source paths and excerpts verbatim; never shorten or reconstruct citations.
+
+        State policy_basis: established/unknown, request/repository/unknown, exact
+        requirement and supporting evidence IDs. For request authority, quote the original
+        event policy_requirement (or named Policy requirement: line) exactly; a generic investigation request is insufficient.
+        For repository authority, quote an actual verified requirement and cite its evidence
+        IDs. A runtime value or a commented configuration example is not authority to
+        change policy. If an edit's desired policy is unresolved, keep decision=blocked and certainty
+        unconfirmed; do not silently choose the observed value. Existing declared policy
+        may instead require reconciliation without a Git edit.
+
+        Copy every still-unresolved reviewer finding verbatim into blocking_findings.
+        resolved_findings must name the exact ORIGINAL reviewer finding and reference
+        verified evidence IDs; confirmed observations are not substitute finding names.
+        Nonempty blocking_findings ALWAYS means blocked, never ready/no_change or confirmed.
       contexts:
       - ${analyze_case.result.content}
-      - ${review_evidence.result.content}
+      - ${prepare_review.result.body}
       - ${evidence_loop.iteration_results}
       - ${scope_request.result.content}
       stage: final_assessment
@@ -951,6 +1099,8 @@ nodes:
                 type: string
               source:
                 type: string
+                description: Exact canonical collector source. Preserve source, tool, excerpt and evidence
+                  ID unchanged in every later handoff.
               observation:
                 type: string
               tool_output_excerpt:
@@ -995,6 +1145,32 @@ nodes:
             required:
             - finding
             - evidence_ids
+        policy_basis:
+          type: object
+          additionalProperties: false
+          properties:
+            status:
+              type: string
+              enum:
+              - established
+              - unknown
+            origin:
+              type: string
+              enum:
+              - request
+              - repository
+              - unknown
+            requirement:
+              type: string
+            evidence_ids:
+              type: array
+              items:
+                type: string
+          required:
+          - status
+          - origin
+          - requirement
+          - evidence_ids
       required:
       - decision
       - conclusion_status
@@ -1011,11 +1187,38 @@ nodes:
       - limitations
       - blocking_findings
       - resolved_findings
+      - policy_basis
     prompt: ${handoff_final_assessment.result.body.prompt}
     tool_selections:
     - __AO_READONLY_TOOL_IDS__
   settings:
     timeout: 1200
+    continue_on_failure: false
+- id: prepare_assessment
+  type: http_request
+  name: Bind canonical citations and enforce unresolved-blocker verdicts
+  parameters:
+    method: POST
+    url: __AO_PREPARE_ASSESSMENT_URL__
+    headers:
+      Content-Type: application/json
+    body:
+      report: ${final_assessment.result.content}
+      packet:
+        scope_request: ${scope_request}
+        investigate_host: ${investigate_host}
+        map_repository: ${map_repository}
+        analyze_case: ${analyze_case}
+        review_evidence: ${review_evidence}
+        final_assessment: ${final_assessment}
+        follow_up: ${evidence_loop.iteration_results}
+        request: ${trigger}
+      review: ${prepare_review.result.body}
+      repository_url: https://github.com/${scope_request.result.content.repository_context.owner}/${scope_request.result.content.repository_context.repository}
+  outputs:
+    result: ${result}
+  settings:
+    timeout: 30
     continue_on_failure: false
 - id: validate_evidence
   type: aap_job_template
@@ -1026,9 +1229,9 @@ nodes:
     credential_id: __AO_AAP_CREDENTIAL_ID__
     organization_name: RHEL GitOps
     extra_vars:
-      ao_report: ${final_assessment.result.content}
-      ao_evidence_review: ${review_evidence.result.content}
-      ao_evidence: &id001
+      ao_report: ${prepare_assessment.result.body.report}
+      ao_evidence_review: ${prepare_review.result.body}
+      ao_evidence:
         scope_request: ${scope_request}
         investigate_host: ${investigate_host}
         map_repository: ${map_repository}
@@ -1036,6 +1239,7 @@ nodes:
         review_evidence: ${review_evidence}
         final_assessment: ${final_assessment}
         follow_up: ${evidence_loop.iteration_results}
+        request: ${trigger}
   outputs:
     job_id: ${result.job_id}
     job_status: ${result.job_status}
@@ -1050,17 +1254,17 @@ nodes:
   name: Route to a proposal, no change, or blocked report
   parameters:
     cases:
-    - port: ready
+    - port: case_0
       label: Evidence supports a GitOps change
-      condition: ${validate_evidence.artifacts.ao_evidence_validation.valid} == True and ${final_assessment.result.content.decision}
-        == 'ready' and ${final_assessment.result.content.conclusion_status} == 'confirmed' and ${final_assessment.result.content.blocking_findings}
+      condition: ${validate_evidence.artifacts.ao_evidence_validation.valid} == True and ${prepare_assessment.result.body.report.decision}
+        == 'ready' and ${prepare_assessment.result.body.report.conclusion_status} == 'confirmed' and ${prepare_assessment.result.body.report.blocking_findings}
         isEmpty
-    - port: no_change
+    - port: case_1
       label: No repository change needed
-      condition: ${validate_evidence.artifacts.ao_evidence_validation.valid} == True and ${final_assessment.result.content.decision}
-        == 'no_change' and ${final_assessment.result.content.conclusion_status} == 'confirmed' and ${final_assessment.result.content.blocking_findings}
-        isEmpty
-    default_port: blocked
+      condition: ${validate_evidence.artifacts.ao_evidence_validation.valid} == True and ${prepare_assessment.result.body.report.decision}
+        == 'no_change' and ${prepare_assessment.result.body.report.conclusion_status} == 'confirmed' and
+        ${prepare_assessment.result.body.report.blocking_findings} isEmpty
+    default_port: default
 - id: handoff_prepare_plan
   type: http_request
   name: 'Prepare compact input: Prepare complete and precisely enumerated variable edits'
@@ -1070,7 +1274,7 @@ nodes:
     headers:
       Content-Type: application/json
     body:
-      template: |-
+      template: |
         Act as a RHEL GitOps incident investigator. Explain causal links using attributed
         facts; distinguish measurements, policy, hypotheses, and future validation.
         Use selected read-only MCP tools, one call at a time; maximum four calls including
@@ -1106,8 +1310,13 @@ nodes:
         per-file justification and evidence IDs, and every exact before/after leaf change.
         Make this answer self-contained: later steps do not receive your tool transcript.
         Keep unknowns explicit and use the configured response schema.
+        This activity has a FRESH budget of four tool calls, independent of earlier
+        activities. A read_handoff call counts only in this activity. Reuse existing
+        observations; spend remaining calls on unresolved facts, never claim a prior
+        activity exhausted your budget. Preserve collector evidence IDs, tools, exact
+        source paths and excerpts verbatim; never shorten or reconstruct citations.
       contexts:
-      - ${final_assessment.result.content}
+      - ${prepare_assessment.result.body.report}
       - ${trigger}
       stage: prepare_plan
   outputs:
@@ -1227,7 +1436,7 @@ nodes:
     headers:
       Content-Type: application/json
     body:
-      template: |-
+      template: |
         Act as a RHEL GitOps incident investigator. Explain causal links using attributed
         facts; distinguish measurements, policy, hypotheses, and future validation.
         Use selected read-only MCP tools, one call at a time; maximum four calls including
@@ -1261,9 +1470,14 @@ nodes:
         no unresolved blockers.
         Make this answer self-contained: later steps do not receive your tool transcript.
         Keep unknowns explicit and use the configured response schema.
+        This activity has a FRESH budget of four tool calls, independent of earlier
+        activities. A read_handoff call counts only in this activity. Reuse existing
+        observations; spend remaining calls on unresolved facts, never claim a prior
+        activity exhausted your budget. Preserve collector evidence IDs, tools, exact
+        source paths and excerpts verbatim; never shorten or reconstruct citations.
       contexts:
       - ${prepare_plan.result.content}
-      - ${final_assessment.result.content}
+      - ${prepare_assessment.result.body.report}
       - ${scope_request.result.content}
       stage: review_plan
   outputs:
@@ -1325,11 +1539,19 @@ nodes:
     organization_name: RHEL GitOps
     extra_vars:
       ao_plan: ${prepare_plan.result.content}
-      ao_report: ${final_assessment.result.content}
+      ao_report: ${prepare_assessment.result.body.report}
       ao_review: ${review_plan.result.content}
       ao_execution_id: ${workflow_context.execution.id}
-      ao_evidence: *id001
-      ao_evidence_review: ${review_evidence.result.content}
+      ao_evidence:
+        scope_request: ${scope_request}
+        investigate_host: ${investigate_host}
+        map_repository: ${map_repository}
+        analyze_case: ${analyze_case}
+        review_evidence: ${review_evidence}
+        final_assessment: ${final_assessment}
+        follow_up: ${evidence_loop.iteration_results}
+        request: ${trigger}
+      ao_evidence_review: ${prepare_review.result.body}
   outputs:
     job_id: ${result.job_id}
     job_status: ${result.job_status}
@@ -1348,7 +1570,7 @@ nodes:
     headers:
       Content-Type: application/json
     body:
-      template: |-
+      template: |
         Act as a RHEL GitOps incident investigator. Explain causal links using attributed
         facts; distinguish measurements, policy, hypotheses, and future validation.
         Use selected read-only MCP tools, one call at a time; maximum four calls including
@@ -1373,8 +1595,13 @@ nodes:
         copy the complete trimmed value. Use tool names without the functions. prefix.
         For a JSON result, a JSON object containing only unchanged returned fields is
         also accepted; do not invent keys or values. Leave evidence empty when no successful results support a claim.
+        This activity has a FRESH budget of four tool calls, independent of earlier
+        activities. A read_handoff call counts only in this activity. Reuse existing
+        observations; spend remaining calls on unresolved facts, never claim a prior
+        activity exhausted your budget. Preserve collector evidence IDs, tools, exact
+        source paths and excerpts verbatim; never shorten or reconstruct citations.
       contexts:
-      - ${final_assessment.result.content}
+      - ${prepare_assessment.result.body.report}
       stage: report_no_change
   outputs:
     result: ${result}
@@ -1413,6 +1640,8 @@ nodes:
                 type: string
               source:
                 type: string
+                description: Exact canonical collector source. Preserve source, tool, excerpt and evidence
+                  ID unchanged in every later handoff.
               observation:
                 type: string
               tool_output_excerpt:
@@ -1452,7 +1681,7 @@ nodes:
     headers:
       Content-Type: application/json
     body:
-      template: |-
+      template: |
         Act as a RHEL GitOps incident investigator. Explain causal links using attributed
         facts; distinguish measurements, policy, hypotheses, and future validation.
         Use selected read-only MCP tools, one call at a time; maximum four calls including
@@ -1480,8 +1709,13 @@ nodes:
         Deterministic evidence validation:
         @@HANDOFF_1@@
         Always report outcome=blocked. Failed checks or absent evidence never justify no_change.
+        This activity has a FRESH budget of four tool calls, independent of earlier
+        activities. A read_handoff call counts only in this activity. Reuse existing
+        observations; spend remaining calls on unresolved facts, never claim a prior
+        activity exhausted your budget. Preserve collector evidence IDs, tools, exact
+        source paths and excerpts verbatim; never shorten or reconstruct citations.
       contexts:
-      - ${final_assessment.result.content}
+      - ${prepare_assessment.result.body.report}
       - ${validate_evidence.artifacts.ao_evidence_validation}
       stage: report_blocked
   outputs:
@@ -1521,6 +1755,8 @@ nodes:
                 type: string
               source:
                 type: string
+                description: Exact canonical collector source. Preserve source, tool, excerpt and evidence
+                  ID unchanged in every later handoff.
               observation:
                 type: string
               tool_output_excerpt:
@@ -1560,7 +1796,7 @@ nodes:
     headers:
       Content-Type: application/json
     body:
-      template: |-
+      template: |
         Act as a RHEL GitOps incident investigator. Explain causal links using attributed
         facts; distinguish measurements, policy, hypotheses, and future validation.
         Use selected read-only MCP tools, one call at a time; maximum four calls including
@@ -1586,9 +1822,14 @@ nodes:
         copy the complete trimmed value. Use tool names without the functions. prefix.
         For a JSON result, a JSON object containing only unchanged returned fields is
         also accepted; do not invent keys or values. Leave evidence empty when no successful results support a claim.
+        This activity has a FRESH budget of four tool calls, independent of earlier
+        activities. A read_handoff call counts only in this activity. Reuse existing
+        observations; spend remaining calls on unresolved facts, never claim a prior
+        activity exhausted your budget. Preserve collector evidence IDs, tools, exact
+        source paths and excerpts verbatim; never shorten or reconstruct citations.
       contexts:
       - ${review_plan.result.content}
-      - ${final_assessment.result.content}
+      - ${prepare_assessment.result.body.report}
       stage: report_rejected_plan
   outputs:
     result: ${result}
@@ -1627,6 +1868,8 @@ nodes:
                 type: string
               source:
                 type: string
+                description: Exact canonical collector source. Preserve source, tool, excerpt and evidence
+                  ID unchanged in every later handoff.
               observation:
                 type: string
               tool_output_excerpt:
@@ -1666,7 +1909,7 @@ nodes:
     headers:
       Content-Type: application/json
     body:
-      template: |-
+      template: |
         Act as a RHEL GitOps incident investigator. Explain causal links using attributed
         facts; distinguish measurements, policy, hypotheses, and future validation.
         Use selected read-only MCP tools, one call at a time; maximum four calls including
@@ -1690,8 +1933,13 @@ nodes:
         copy the complete trimmed value. Use tool names without the functions. prefix.
         For a JSON result, a JSON object containing only unchanged returned fields is
         also accepted; do not invent keys or values. Leave evidence empty when no successful results support a claim.
+        This activity has a FRESH budget of four tool calls, independent of earlier
+        activities. A read_handoff call counts only in this activity. Reuse existing
+        observations; spend remaining calls on unresolved facts, never claim a prior
+        activity exhausted your budget. Preserve collector evidence IDs, tools, exact
+        source paths and excerpts verbatim; never shorten or reconstruct citations.
       contexts:
-      - ${review_evidence.result.content}
+      - ${prepare_review.result.body}
       - ${analyze_case.result.content}
       stage: report_invalid_budget
   outputs:
@@ -1731,6 +1979,8 @@ nodes:
                 type: string
               source:
                 type: string
+                description: Exact canonical collector source. Preserve source, tool, excerpt and evidence
+                  ID unchanged in every later handoff.
               observation:
                 type: string
               tool_output_excerpt:
@@ -1775,10 +2025,15 @@ nodes:
     headers:
       Content-Type: application/json
     body:
-      template: |-
+      template: |
         Report that scope_request did not execute diagnostic tools. The investigation is blocked; do not invent evidence or report no_change. Runtime output:
         @@HANDOFF_0@@
         Final handoff: Return outcome=blocked, an explanation, no invented evidence, and the missing tool execution as an unanswered question. Use the configured response schema.
+        This activity has a FRESH budget of four tool calls, independent of earlier
+        activities. A read_handoff call counts only in this activity. Reuse existing
+        observations; spend remaining calls on unresolved facts, never claim a prior
+        activity exhausted your budget. Preserve collector evidence IDs, tools, exact
+        source paths and excerpts verbatim; never shorten or reconstruct citations.
       contexts:
       - ${scope_request.result.content}
       stage: report_scope_request_tools
@@ -1819,6 +2074,8 @@ nodes:
                 type: string
               source:
                 type: string
+                description: Exact canonical collector source. Preserve source, tool, excerpt and evidence
+                  ID unchanged in every later handoff.
               observation:
                 type: string
               tool_output_excerpt:
@@ -1863,10 +2120,15 @@ nodes:
     headers:
       Content-Type: application/json
     body:
-      template: |-
+      template: |
         Report that investigate_host did not execute diagnostic tools. The investigation is blocked; do not invent evidence or report no_change. Runtime output:
         @@HANDOFF_0@@
         Final handoff: Return outcome=blocked, an explanation, no invented evidence, and the missing tool execution as an unanswered question. Use the configured response schema.
+        This activity has a FRESH budget of four tool calls, independent of earlier
+        activities. A read_handoff call counts only in this activity. Reuse existing
+        observations; spend remaining calls on unresolved facts, never claim a prior
+        activity exhausted your budget. Preserve collector evidence IDs, tools, exact
+        source paths and excerpts verbatim; never shorten or reconstruct citations.
       contexts:
       - ${investigate_host.result.content}
       stage: report_investigate_host_tools
@@ -1907,6 +2169,8 @@ nodes:
                 type: string
               source:
                 type: string
+                description: Exact canonical collector source. Preserve source, tool, excerpt and evidence
+                  ID unchanged in every later handoff.
               observation:
                 type: string
               tool_output_excerpt:
@@ -1951,10 +2215,15 @@ nodes:
     headers:
       Content-Type: application/json
     body:
-      template: |-
+      template: |
         Report that map_repository did not execute diagnostic tools. The investigation is blocked; do not invent evidence or report no_change. Runtime output:
         @@HANDOFF_0@@
         Final handoff: Return outcome=blocked, an explanation, no invented evidence, and the missing tool execution as an unanswered question. Use the configured response schema.
+        This activity has a FRESH budget of four tool calls, independent of earlier
+        activities. A read_handoff call counts only in this activity. Reuse existing
+        observations; spend remaining calls on unresolved facts, never claim a prior
+        activity exhausted your budget. Preserve collector evidence IDs, tools, exact
+        source paths and excerpts verbatim; never shorten or reconstruct citations.
       contexts:
       - ${map_repository.result.content}
       stage: report_map_repository_tools
@@ -1995,6 +2264,8 @@ nodes:
                 type: string
               source:
                 type: string
+                description: Exact canonical collector source. Preserve source, tool, excerpt and evidence
+                  ID unchanged in every later handoff.
               observation:
                 type: string
               tool_output_excerpt:
@@ -2037,7 +2308,7 @@ edges:
 - from: analyze_case
   to: handoff_review_evidence
 - from: review_evidence
-  to: limit_checks
+  to: prepare_review
 - from: limit_checks
   to: evidence_loop
   from_port: 'true'
@@ -2054,16 +2325,16 @@ edges:
   to: handoff_final_assessment
   from_port: complete
 - from: final_assessment
-  to: validate_evidence
+  to: prepare_assessment
 - from: route_assessment
   to: handoff_prepare_plan
-  from_port: ready
+  from_port: case_0
 - from: route_assessment
   to: handoff_report_no_change
-  from_port: no_change
+  from_port: case_1
 - from: route_assessment
   to: handoff_report_blocked
-  from_port: blocked
+  from_port: default
 - from: prepare_plan
   to: handoff_review_plan
 - from: review_plan
@@ -2126,3 +2397,7 @@ edges:
   to: report_investigate_host_tools
 - from: handoff_report_map_repository_tools
   to: report_map_repository_tools
+- from: prepare_review
+  to: limit_checks
+- from: prepare_assessment
+  to: validate_evidence
