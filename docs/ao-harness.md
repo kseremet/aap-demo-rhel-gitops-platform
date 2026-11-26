@@ -3,7 +3,9 @@
 This harness supports AAP 2.6 and the AO 2026.8 workflow format represented in the
 reference documentation. Both incident and maintainer-feedback workflows use the
 same investigation, evidence review, and publication gates. CrewAI remains a
-separate backend. AO model selection is still controlled by `demo_ao_llm_model`.
+separate backend. AO model selection is still controlled by `demo_ao_llm_model`. This value is the
+provider model identifier (`model_id`, for example `gpt-4.1`), not the UI display
+label. CasC queries that exact identifier and requires an enabled model.
 
 ## Investigation and review
 

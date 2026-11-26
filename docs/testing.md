@@ -35,6 +35,12 @@ Tracks testing progress for this demo. For procedural verification steps, see [s
 
 ## Latest local validation
 
+- 2026-11-26: Seven model-selection regression cases passed against a local fake
+  AO catalog API. Discovery now queries exact provider `model_id[eq]`, rather than
+  a display label or the first unfiltered page, and requires the model to be enabled.
+  Missing, disabled, duplicate, and wrong-provider records are rejected. CasC syntax,
+  offline lint, and diff checks passed. Live catalog resolution remains pending.
+
 - 2026-11-26: All 52 offline regression checks passed. New cases run both PR
   creation/revision and the EDA bridge from SCM-style checkouts without the ignored
   Vault and demo variable files. Added empty fallbacks while retaining local

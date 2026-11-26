@@ -193,7 +193,11 @@
 
 - name: Resolve the LLM model record used by AO workflows
   ansible.builtin.uri:
-    url: "{{ ao_api_base_url }}/integrations/{{ ao_integration_id }}/models?limit=100"
+    # Filter on the provider identifier at the API, not a display label or the
+    # first catalog page. AO exposes exact filters with field[eq] syntax.
+    url: >-
+      {{ ao_api_base_url }}/integrations/{{ ao_integration_id
+      }}/models?limit=100&model_id%5Beq%5D={{ ao_llm_model_name | urlencode }}
     method: GET
     headers:
       Authorization: "Bearer {{ ao_access_token }}"
@@ -214,14 +218,30 @@
 
 # Do not silently fall back to the provider's default model: that can restore
 # the reasoning/tool API incompatibility this workflow's model selection avoids.
+- name: Match the configured provider model identifier
+  ansible.builtin.set_fact:
+    _ao_matching_models: >-
+      {{ _ao_models.json.resources
+         | selectattr('model_id', 'equalto', ao_llm_model_name) | list }}
+  when: ao_integration.integration_type == 'llm_provider'
+  tags:
+    - ao
+    - validation
+
 - name: Require the configured AO model in the discovered model catalog
   ansible.builtin.assert:
     that:
       - >-
-        (_ao_models.json.resources | selectattr('name', 'equalto', ao_llm_model_name) | list | length) == 1
+        (_ao_matching_models | length) == 1
+      - >-
+        (_ao_matching_models | selectattr('enabled', 'equalto', true) | list | length) == 1
     fail_msg: >-
-      AO model {{ ao_llm_model_name }} was not uniquely discovered. Check the
-      LLM integration model catalog and demo_ao_llm_model before importing workflows.
+      AO provider model_id {{ ao_llm_model_name }} must match exactly one enabled
+      model in integration {{ ao_integration.name }} ({{ ao_integration_id }}).
+      Found {{ _ao_matching_models | length }} matching record(s), of which
+      {{ _ao_matching_models | selectattr('enabled', 'equalto', true) | list | length }}
+      are enabled. Check the model's enabled state and demo_ao_llm_model (provider
+      ID, not display name). The model catalog query must support model_id[eq].
   when: ao_integration.integration_type == 'llm_provider'
   tags:
     - ao
@@ -232,8 +252,7 @@
     ao_llm_integration_id: "{{ ao_integration_id }}"
     ao_llm_credential_id: "{{ ao_integration_credential_id }}"
     ao_llm_model_id: >-
-      {{ (_ao_models.json.resources
-          | selectattr('name', 'equalto', ao_llm_model_name) | list | first).id }}
+      {{ (_ao_matching_models | first).id }}
   when: ao_integration.integration_type == 'llm_provider'
   changed_when: false
 
