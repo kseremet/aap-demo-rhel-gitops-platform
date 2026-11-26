@@ -21,6 +21,25 @@
       X-GitHub-Api-Version: "2022-11-28"
   tags: [ao, github]
   tasks:
+    # Decode inside trusted fixed code, then mark every nested string unsafe.
+    # Repository/model data may contain literal Jinja and must never execute here.
+    - name: Decode the lossless AO handoff without templating its contents
+      ansible.builtin.set_fact:
+        _ao_decoded: "{{ ao_payload_b64 | ao_decode_payload }}"
+      when: ao_payload_b64 is defined
+      no_log: true
+
+    - name: Use the decoded review and evidence objects
+      ansible.builtin.set_fact:
+        ao_report: "{{ _ao_decoded.ao_report }}"
+        ao_plan: "{{ _ao_decoded.ao_plan }}"
+        ao_review: "{{ _ao_decoded.ao_review }}"
+        ao_evidence: "{{ _ao_decoded.ao_evidence }}"
+        ao_evidence_review: "{{ _ao_decoded.ao_evidence_review }}"
+        ao_execution_id: "{{ _ao_decoded.ao_execution_id }}"
+      when: ao_payload_b64 is defined
+      no_log: true
+
     - name: Require the reviewed proposal and diagnostic report
       ansible.builtin.assert:
         that:

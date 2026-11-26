@@ -80,13 +80,8 @@ def test_schema_contracts_and_graph(path):
             assert node["parameters"]["llm_model_id"] == "__AO_LLM_MODEL_ID__"
             assert node["settings"]["continue_on_failure"] is False
     assert nodes["publish_proposal"]["settings"]["retry_policy"]["max_retries"] == 0
-    assert set(nodes["publish_proposal"]["parameters"]["extra_vars"]) == {
-        "ao_plan",
-        "ao_report",
-        "ao_review",
-        "ao_execution_id",
-        "ao_evidence",
-        "ao_evidence_review",
+    assert nodes["publish_proposal"]["parameters"]["extra_vars"] == {
+        "ao_payload_b64": "${package_decision.result.body.payload_b64}"
     }
 
 
@@ -201,7 +196,7 @@ def test_three_roles_have_no_loop_or_hidden_reporter(path):
         "propose",
         "review",
     ]
-    assert len(nodes) == 14
+    assert len(nodes) == 16
     assert not any(n["type"] in ("loop", "script") for n in nodes.values())
     assert (
         nodes["collect_evidence"]["parameters"]["job_template_name"]
@@ -218,12 +213,12 @@ def test_three_roles_have_no_loop_or_hidden_reporter(path):
         prompt = nodes["input_" + role]["parameters"]["body"]["template"]
         assert "maintainer" in prompt.lower()
     assert (
-        nodes["validate_evidence"]["parameters"]["extra_vars"]["ao_evidence"]
-        == "${compile_proposal.result.body.packet}"
+        nodes["validate_evidence"]["parameters"]["extra_vars"]["ao_payload_b64"]
+        == "${package_decision.result.body.payload_b64}"
     )
     assert (
-        nodes["publish_proposal"]["parameters"]["extra_vars"]["ao_evidence"]
-        == "${compile_proposal.result.body.packet}"
+        nodes["publish_proposal"]["parameters"]["extra_vars"]["ao_payload_b64"]
+        == "${package_decision.result.body.payload_b64}"
     )
 
 
@@ -249,7 +244,9 @@ def test_real_ao_publication_routing(path, decision, valid, approved, blockers, 
         "validate_evidence": {
             "artifacts": {"ao_evidence_validation": {"valid": valid}}
         },
-        "compile_proposal": {"result": {"body": {"report": {"decision": decision}}}},
+        "prepare_proposal": {
+            "artifacts": {"ao_proposal": {"report": {"decision": decision}}}
+        },
         "review": {
             "result": {"content": {"approved": approved, "blocking_findings": blockers}}
         },
@@ -298,8 +295,10 @@ def test_visual_editor_roundtrip_preserves_gate_semantics(path, tmp_path):
                                     "ao_evidence_validation": {"valid": valid}
                                 }
                             },
-                            "compile_proposal": {
-                                "result": {"body": {"report": {"decision": decision}}}
+                            "prepare_proposal": {
+                                "artifacts": {
+                                    "ao_proposal": {"report": {"decision": decision}}
+                                }
                             },
                             "review": {
                                 "result": {

@@ -235,6 +235,16 @@ controller_templates:
     credentials:
       - "{{ demo_machine_credential_name }}"
       - GitHub API Access
+  # Pure preparation parses full candidate files and computes exact leaf deltas
+  # before review. It has no host or GitHub credentials and cannot publish.
+  - name: JT - AO Prepare Proposal
+    description: Bind verified evidence and compute exact typed YAML deltas before independent review.
+    organization: "{{ demo_organization_name }}"
+    job_type: run
+    inventory: "{{ demo_ai_inventory_name }}"
+    project: "{{ demo_platform_project_name }}"
+    playbook: playbooks/ai/prepare_ao_proposal.yml
+    ask_variables_on_launch: true
   - name: JT - AO Evidence Validation
     description: Validate diagnostic claims against successful AO runtime tool results without writes.
     organization: "{{ demo_organization_name }}"

@@ -103,19 +103,12 @@ def differences(old, new, prefix=()):
     return result
 
 
-def validate_plan(plan, report, review, repository_url, branch_prefix="aiops/"):
+def validate_plan_contract(plan, report, repository_url, branch_prefix="aiops/"):
     require(isinstance(plan, dict), "AO plan must be an object")
     require(
         isinstance(report, dict) and report.get("decision") == "ready",
         "Only an evidence-supported ready assessment may write",
     )
-    require(
-        isinstance(review, dict)
-        and review.get("approved") is True
-        and review.get("blocking_findings") == [],
-        "Independent plan review must approve with no blockers",
-    )
-    require(text(review.get("summary")), "Independent review must explain its approval")
     parsed = urlparse(repository_url)
     expected_repo = parsed.path.strip("/").removesuffix(".git")
     require(
@@ -268,11 +261,25 @@ def validate_plan(plan, report, review, repository_url, branch_prefix="aiops/"):
             "Observed-value proposal must actually declare the verified proposed value",
         )
     require(len(paths) == len(set(paths)), "Duplicate file paths are not allowed")
+    return deepcopy(plan)
+
+
+def validate_plan(plan, report, review, repository_url, branch_prefix="aiops/"):
+    """The publication entry point always requires real independent approval."""
+    require(
+        isinstance(review, dict)
+        and review.get("approved") is True
+        and review.get("blocking_findings") == [],
+        "Independent plan review must approve with no blockers",
+    )
+    require(text(review.get("summary")), "Independent review must explain its approval")
+    validated = validate_plan_contract(plan, report, repository_url, branch_prefix)
+    paths = [item["path"] for item in validated["files"]]
     require(
         sorted(review.get("reviewed_paths", [])) == sorted(paths),
         "Reviewer must cover every proposed file",
     )
-    return deepcopy(plan)
+    return validated
 
 
 def consumed_variables(response):

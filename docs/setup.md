@@ -221,7 +221,8 @@ Import these workflow definitions into Automation Orchestrator:
 Combined CasC supplies the EDA paths, discovered model/tool IDs, integration
 credentials, and native HTTP helper URLs automatically. It also configures
 **JT - AO Collect Evidence** with the fleet inventory, SSH machine credential,
-and GitHub API Access. The platform project must sync the pushed revision before
+and GitHub API Access. **JT - AO Prepare Proposal** computes exact YAML deltas
+without host or GitHub credentials before independent review. The platform project must sync the pushed revision before
 AAP creates that template. The same verified VMI discovery refreshes both MCP
 aliases and AAP fleet addresses, preserving local generated files. Publish both
 updated AO drafts before testing. See the [three-agent harness](ao-harness.md)

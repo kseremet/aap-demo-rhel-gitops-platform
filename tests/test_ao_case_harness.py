@@ -385,8 +385,8 @@ def test_prompts_use_measured_views_without_duplicating_raw_packets():
             "plan",
         }
         assert (
-            nodes["validate_evidence"]["parameters"]["extra_vars"]["ao_evidence"]
-            == "${compile_proposal.result.body.packet}"
+            nodes["validate_evidence"]["parameters"]["extra_vars"]["ao_payload_b64"]
+            == "${package_decision.result.body.payload_b64}"
         )
 
 
@@ -451,6 +451,14 @@ def test_foundation_supplies_requested_sysctl_measurement_without_model_tool_cho
     )
     assert evidence["tool_output_excerpt"] == "65535\n"
     assert len(evidence["id"]) == 3
+    assert case["view"]["observed_values"] == [
+        {
+            "resource": "net.core.somaxconn",
+            "actual_value": "65535",
+            "evidence_id": evidence["id"],
+            "measurement_path": [],
+        }
+    ]
 
 
 def test_real_foundation_measurement_can_support_adoption_without_mcp_call(handoff):

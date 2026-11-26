@@ -360,6 +360,7 @@ def run_writer(
     stale_branch=False,
     revision=False,
     scm_checkout=False,
+    encoded=False,
     bridge=False,
 ):
     plan, report, review = deepcopy(handoff)
@@ -466,6 +467,19 @@ def run_writer(
                 ao_webhook_client_secret="fake-secret",
                 aap_validate_certs=False,
             )
+        if encoded:
+            keys = [
+                "ao_plan",
+                "ao_report",
+                "ao_review",
+                "ao_evidence",
+                "ao_evidence_review",
+            ]
+            payload = {key: extra.pop(key) for key in keys}
+            payload["ao_execution_id"] = "offline-encoded"
+            extra["ao_payload_b64"] = base64.b64encode(
+                json.dumps(payload).encode()
+            ).decode()
         (tmp_path / "input.json").write_text(json.dumps(extra))
         (tmp_path / "ansible.cfg").write_text(
             "[defaults]\ninterpreter_python=auto_silent\n"
@@ -578,3 +592,15 @@ def test_eda_bridge_runs_from_a_clean_scm_checkout(tmp_path, handoff):
     )
     assert template["ask_variables_on_launch"] is True
     assert template["extra_vars"]["aap_validate_certs"] == "{{ aap_validate_certs }}"
+
+
+def test_encoded_writer_keeps_model_jinja_literal_and_rechecks_gates(tmp_path, handoff):
+    handoff[1]["root_cause"] += " Literal template example: {{ 41 + 1 }}."
+    completed, calls = run_writer(tmp_path, handoff, encoded=True)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    pr = next(
+        data
+        for method, path, data in calls
+        if method != "GET" and path.endswith("/pulls")
+    )
+    assert "{{ 41 + 1 }}" in pr["body"]

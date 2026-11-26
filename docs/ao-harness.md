@@ -7,6 +7,7 @@ Event or maintainer feedback
   -> AAP: pinned repository snapshot and read-only target facts
   -> Agent 1: investigate cause, measurements and durable alternatives
   -> Agent 2: propose exact desired-state edits
+  -> AAP: bind evidence and compute exact typed YAML changes
   -> Agent 3: independently review diagnosis, scope and exact edits
   -> AAP: deterministic evidence validation
        ready + approved -> AAP writer -> PR for human review
@@ -89,8 +90,18 @@ context marker to make subsequent feedback unambiguous.
 
 ## AAP publication contract
 
-`JT - AO GitOps Action` receives `ao_plan`, `ao_report`, `ao_review`,
-`ao_execution_id`, `ao_evidence`, and `ao_evidence_review`. Older workflows
+`JT - AO Prepare Proposal` parses the author's complete file contents and computes
+exact typed YAML leaf changes against the pinned snapshot. It has no SSH/GitHub
+credentials, cannot approve or publish, and returns explicit blockers for invalid
+files, no-op edits, lost comments or unsupported variables. The independent reviewer
+sees these exact deltas before approval; the model does not calculate them.
+
+`JT - AO GitOps Action` receives a lossless `ao_payload_b64` package containing
+`ao_plan`, `ao_report`, `ao_review`, `ao_execution_id`, `ao_evidence`, and
+`ao_evidence_review`. Fixed decoding marks nested strings as literal data, so
+Jinja present in a repository or model response is preserved rather than executed
+by Ansible. The preparation and evidence jobs use the same transport. Legacy direct
+fields remain supported for existing offline callers. Older workflows
 without runtime evidence are rejected before GitHub access.
 The standalone playbook retains its local `vars_files`, with empty fallbacks when
 ignored files are absent from an AAP SCM checkout. CasC binds repository identity,
@@ -157,20 +168,33 @@ ansible-playbook playbooks/casc.yml
 ```
 
 Use `--vault-id @prompt` when your vault is encrypted. The platform AAP project
-must sync to the pushed revision before creating **JT - AO Collect Evidence**.
+must sync to the pushed revision before creating **JT - AO Collect Evidence** and
+**JT - AO Prepare Proposal**.
 That template uses the fleet inventory, machine credential and GitHub API Access.
 Combined CasC reuses the verified running VMI addresses for both MCP and AAP
 SSH inventory, while preserving local generated files and unrelated host variables.
 Both the evidence validator and writer must use this same platform revision.
 Refresh the AO editor and publish each updated draft before running mock data.
 
-A generic drift event needs no pre-approved policy requirement:
+A generic drift event needs no pre-approved policy requirement. Reconciliation
+back to an already-declared state can correctly return `no_change` (no repo edit):
 
 ```json
 {
   "incident_id": "demo-web-01-somaxconn",
   "target_host": "web-01",
   "description": "Investigate net.core.somaxconn drift on web-01. Compare the running value with active repository declarations and propose a durable resolution for maintainer review."
+}
+```
+
+To exercise a proposed observed-value adoption, make the candidate-review intent
+explicit without claiming that the future policy has already been approved:
+
+```json
+{
+  "incident_id": "demo-observed-value-proposal",
+  "target_host": "web-01",
+  "description": "Prepare a host-scoped candidate PR for maintainer review to preserve the verified observed net.core.somaxconn value if technically feasible. Future policy approval remains pending. Compare restoring the baseline as an alternative."
 }
 ```
 

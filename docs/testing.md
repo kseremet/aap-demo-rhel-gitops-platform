@@ -24,7 +24,9 @@ Tracks testing progress for this demo. For procedural verification steps, see [s
 |---|---|---|---|
 | AO GitOps Action (`ai/run_ao_gitops_action.yml`) | Partial | 2026-11-26 | Reviewed plan/report contract, pinned branch/blob checks, consumed-variable and exact YAML delta validation, full PR reporting, and atomic multi-file commit publication implemented. Offline fake-API tests cover create/revise and zero mutations on preflight failure. Syntax and offline lint passed; live AAP/GitHub validation is pending. |
 
-| AO Collect Evidence (`ai/collect_ao_evidence.yml`) | Partial | 2026-11-26 | Local snapshot/identity/secret-exclusion regressions and isolated live AAP collection passed. Full incident and PR-feedback runs remain pending. |
+| AO Collect Evidence (`ai/collect_ao_evidence.yml`) | Partial | 2026-11-27 | Local snapshot/identity/secret-exclusion regressions and isolated live AAP collection passed. Full incident and PR-feedback runs remain pending. |
+
+| AO Prepare Proposal (`ai/prepare_ao_proposal.yml`) | Partial | 2026-11-27 | Local Ansible execution computes exact typed YAML changes without credentials or mutations; invalid/no-op candidates remain blocked. Live full publication testing remains pending. |
 
 | AO Evidence Validation (`ai/validate_ao_evidence.yml`) | Partial | 2026-11-26 | Read-only runtime provenance, commit/host scope, exact excerpts, typed JSON fields, and blocker resolution checks implemented. Local Ansible execution returns routable valid/blocked artifacts. Live CasC creation succeeded after refreshing the platform Project; live AAP job execution remains pending. |
 
@@ -40,7 +42,7 @@ Tracks testing progress for this demo. For procedural verification steps, see [s
 ## Current harness validation
 
 - Three-agent simplification: investigate, propose, independently review; no
-  refinement loop. The regression suite passed 198 checks, including real AO
+  refinement loop. The regression suite passed 206 checks, including real AO
   schema, routing, variable-reference and visual-editor checks. Focused Ansible
   lint passed. Both deployed AO definitions validated with zero findings.
 - Read-only AAP collection job `6431` succeeded on `web-01` with zero changes,
@@ -61,6 +63,16 @@ Tracks testing progress for this demo. For procedural verification steps, see [s
 - The updated fixed adapter helper deployed successfully. The temporary probes
   contain no publication node. Final three-agent probe results are recorded below
   when complete. No real PR was created by these checks.
+
+- 2026-11-27: The final read-only collector `6440` returned actual somaxconn
+  `65535`, 22 pinned repository files, and real LV/VG/mount measurements. A
+  candidate-review probe produced a host-only override with independent approval
+  and a positive evidence verdict. Local publication preflight exposed model
+  mapping-level deltas; these are now computed mechanically before review.
+  Encoded, literal-safe handoffs preserve Jinja source data through Ansible.
+  Dedicated tests verify exact leaf expansion, no-op/comment rejection, literal
+  preservation, and that preparation cannot replace independent approval. The full
+  206-test suite, focused lint, and deployed AO schema validation passed.
 
 Full incident-to-PR and maintainer-feedback tests remain pending; status is Partial.
 

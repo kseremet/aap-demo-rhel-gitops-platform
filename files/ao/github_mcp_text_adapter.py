@@ -11,7 +11,13 @@ from handoff_packets import HANDOFF_TOOL, PacketStore
 from prepare_agent_prompt import prepare_prompt
 from review_checks import prepare_review
 from ao_evidence import normalize_assessment
-from harness_case import prepare_case, compile_proposal, terminal_result
+from harness_case import (
+    prepare_case,
+    compile_proposal,
+    terminal_result,
+    encode_preparation,
+    package_decision,
+)
 import http.client
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -257,7 +263,11 @@ class AdapterHandler(BaseHTTPRequestHandler):
                     raise ValueError("Handoff request must be an object")
                 if self.path == "/harness":
                     operation = data.pop("operation", None)
-                    if operation == "case":
+                    if operation == "prepare":
+                        output = encode_preparation(**data)
+                    elif operation == "decision":
+                        output = package_decision(**data)
+                    elif operation == "case":
                         output = prepare_case(**data)
                     elif operation == "proposal":
                         output = compile_proposal(**data)

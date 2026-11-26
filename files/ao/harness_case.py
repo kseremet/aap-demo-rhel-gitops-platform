@@ -1,10 +1,10 @@
 """Small shared harness: immutable evidence registry and proposal packaging."""
 
+import base64
 import copy
 import hashlib
 import json
 import re
-from ao_evidence import successful_results, REPO_READ_TOOLS, COMMIT_TOOLS
 
 
 def require(condition, message):
@@ -13,6 +13,8 @@ def require(condition, message):
 
 
 def evidence_registry(packet, context, host):
+    from ao_evidence import successful_results, REPO_READ_TOOLS, COMMIT_TOOLS
+
     entries = {}
     fingerprints = set()
     for record in successful_results(packet):
@@ -69,11 +71,25 @@ def prepare_case(collection, investigation):
     host = collection["target_host"]
     registry = evidence_registry(packet, context, host)
     result = investigation.get("result", {}).get("content", {})
+    observed = []
+    for key, value in collection["host_facts"].get("sysctl", {}).items():
+        source = "host:" + host + ":/proc/sys/" + key.replace(".", "/")
+        for identifier, evidence in registry.items():
+            if evidence["tool"] == "ansible_slurp" and evidence["source"] == source:
+                observed.append(
+                    {
+                        "resource": key,
+                        "actual_value": value,
+                        "evidence_id": identifier,
+                        "measurement_path": [],
+                    }
+                )
     return {
         "collection": collection,
         "packet": packet,
         "registry": registry,
         "view": {
+            "observed_values": observed,
             "request": collection["request"],
             "repository_context": context,
             "target_host": host,
@@ -180,4 +196,32 @@ def terminal_result(proposal, review, validation):
         "summary": report.get("recommendation", "Review the collected evidence."),
         "blocking_findings": findings,
         "next_steps": report.get("validation_plan", []),
+    }
+
+
+def encode_preparation(case, proposal, execution_id):
+    # Preserve literal Jinja in repository files when crossing into Ansible vars.
+    return {
+        "payload_b64": base64.b64encode(
+            json.dumps(
+                {"case": case, "proposal": proposal, "execution_id": execution_id},
+                ensure_ascii=False,
+            ).encode()
+        ).decode()
+    }
+
+
+def package_decision(proposal, review, execution_id):
+    payload = {
+        "ao_report": proposal["report"],
+        "ao_plan": proposal["plan"],
+        "ao_evidence": proposal["packet"],
+        "ao_review": review,
+        "ao_evidence_review": review,
+        "ao_execution_id": execution_id,
+    }
+    return {
+        "payload_b64": base64.b64encode(
+            json.dumps(payload, ensure_ascii=False).encode()
+        ).decode()
     }
