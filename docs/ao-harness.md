@@ -48,6 +48,12 @@ Final assessment with the original and additional evidence
 | Final assessment | Resolve every finding or return blocked. Preserve the evidence, causal explanation, scope, alternatives, future validation, and limitations. |
 | Edit planning and independent review | Inspect complete files at the pinned revision and check every proposed leaf change, affected host/group, and consuming variable. |
 
+The condition gates use the visual builder's `exists` and `isEmpty` operators.
+The four-check gate verifies that a fifth list item does not exist. The publication
+gate requires approval and an empty blocker list. Do not replace these with raw
+`len(...)` calls: the backend supports them, but the current visual editor can
+serialize them into malformed nested variable references when saving.
+
 There is one diagnostic refinement cycle per run. Unresolved gaps do not start an
 unbounded retry loop or force a PR. Each agent step has a 1,200-second timeout and
 stops the branch on failure. The loop has an engine limit of five control turns:
@@ -179,7 +185,8 @@ When AO's source exists under the parent workbench's `references/syntara`, the
 workflow tests additionally validate importer substitutions against AO's schemas
 and resolve routing expressions using AO's actual evaluator. Without that optional
 checkout, those checks are skipped; writer tests and local graph/contract checks
-still run.
+still run. With Node 24+ available, an additional check uses AO's actual visual
+expression parser and serializer to verify saved conditions retain their meaning.
 
 For live validation, use the same incident wording and repository revision as the
 CrewAI comparison. Inspect every agent's final output and actual tool arguments /

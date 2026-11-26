@@ -285,3 +285,76 @@ def test_diagnostic_budget_is_enforced_before_the_loop():
                 "review_evidence": {"result": {"content": {"follow_up": [{}] * count}}}
             }
             assert evaluate(gate["parameters"]["condition"], namespace) is allowed
+
+
+@pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.stem)
+def test_visual_editor_roundtrip_preserves_gate_semantics(path, tmp_path):
+    import re
+    import shutil
+    import subprocess
+
+    _, evaluate = ao_runtime()
+    node = shutil.which("node")
+    if not node:
+        pytest.skip(
+            "Optional Node 24+ runtime for AO visual-editor regression is absent"
+        )
+    major = int(
+        subprocess.check_output([node, "--version"], text=True)
+        .strip()
+        .lstrip("v")
+        .split(".")[0]
+    )
+    if major < 24:
+        pytest.skip("Optional visual-editor regression requires Node 24+")
+    source = SOURCES.parents[1] / "frontend/packages/syntara-ui/src/utils/expressions"
+    workflow = yaml.safe_load(path.read_text())
+    gates = {
+        n["id"]: n["parameters"]["condition"]
+        for n in workflow["nodes"]
+        if n["type"] == "condition"
+    }
+    completed = subprocess.run(
+        [
+            node,
+            str(ROOT / "tests/ao_expression_roundtrip.mjs"),
+            str(source),
+            str(tmp_path),
+        ],
+        input=json.dumps(list(gates.values())),
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    results = json.loads(completed.stdout)
+    for gate, result in zip(gates, results, strict=True):
+        assert result["once"] == result["twice"], result
+        # Saved templates must contain paths only, never nested function syntax.
+        for reference in re.findall(r"\$\{([^}]+)\}", result["twice"]):
+            assert "${" not in reference and "(" not in reference, result
+        condition = result["twice"]
+        if gate == "limit_checks":
+            for count in [0, 1, 4, 5, 6]:
+                namespace = {
+                    "review_evidence": {
+                        "result": {"content": {"follow_up": [{}] * count}}
+                    }
+                }
+                assert evaluate(condition, namespace) is (count <= 4)
+        elif gate == "approve_plan":
+            for approved, blockers in [
+                (True, []),
+                (False, []),
+                (True, ["unproven edit"]),
+            ]:
+                namespace = {
+                    "review_plan": {
+                        "result": {
+                            "content": {
+                                "approved": approved,
+                                "blocking_findings": blockers,
+                            }
+                        }
+                    }
+                }
+                assert evaluate(condition, namespace) is (approved and not blockers)

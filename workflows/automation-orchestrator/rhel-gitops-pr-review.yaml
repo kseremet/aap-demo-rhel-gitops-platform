@@ -515,7 +515,7 @@ nodes:
   type: condition
   name: Enforce the four-check diagnostic budget
   parameters:
-    condition: len(${review_evidence.result.content.follow_up}) <= 4
+    condition: not (${review_evidence.result.content.follow_up[4]} exists)
 - id: evidence_loop
   type: loop
   name: Collect requested missing evidence (up to four checks)
@@ -1006,8 +1006,8 @@ nodes:
   type: condition
   name: Publish only an independently approved plan
   parameters:
-    condition: ${review_plan.result.content.approved} == True and len(${review_plan.result.content.blocking_findings})
-      == 0
+    condition: ${review_plan.result.content.approved} == True and ${review_plan.result.content.blocking_findings}
+      isEmpty
 - id: publish_proposal
   type: aap_job_template
   name: Publish the complete reviewed proposal through AAP

@@ -35,6 +35,13 @@ Tracks testing progress for this demo. For procedural verification steps, see [s
 
 ## Latest local validation
 
+- 2026-11-26: Replaced raw `len(...)` condition calls with visual-builder-compatible
+  `exists` / `isEmpty` gates in both workflows. All 19 workflow checks passed,
+  including real frontend parser/serializer round-trips followed by backend
+  evaluation for zero/four/five checks, approval/rejection, and unresolved blockers.
+  Only the two conditions per workflow changed; response schemas and other workflow
+  data are unchanged. Live UI save/run verification remains pending.
+
 - 2026-11-26: Removed embedded JSON contracts from all 26 agentic prompts and
   replaced them with concise role-specific handoff requirements. Response schemas
   and all other workflow data are unchanged. All 17 workflow importer/schema and
