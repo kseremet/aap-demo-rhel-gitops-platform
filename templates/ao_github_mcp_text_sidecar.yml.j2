@@ -1,0 +1,68 @@
+# Strategic-merge patch: add one sidecar and code volume while retaining the
+# original MCP container's arguments, environment, mounts, and Service port.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ ao_github_text_deployment_name }}
+  namespace: {{ openshift_vm_namespace }}
+  resourceVersion: "{{ _ao_github_text_deployment.resources[0].metadata.resourceVersion }}"
+spec:
+  template:
+    metadata:
+      annotations:
+        aap-workbench.github-mcp-text/source-sha256: "{{ lookup('ansible.builtin.file', ao_github_text_source_file, rstrip=false) | hash('sha256') }}"
+    spec:
+      containers:
+        # Pin the digest already running, avoiding an incidental latest-tag
+        # upgrade of GitHub MCP when the sidecar causes a pod rollout.
+        - name: {{ ao_github_text_upstream_container }}
+          image: {{ _ao_github_text_running_images | first }}
+        - name: ao-text-adapter
+          image: {{ ao_github_text_adapter_image }}
+          imagePullPolicy: IfNotPresent
+          command: [python3, /opt/ao-mcp-text/adapter.py]
+          env:
+            - name: MCP_UPSTREAM_URL
+              value: "http://127.0.0.1:{{ _ao_github_text_upstream_port }}/mcp"
+            - name: LISTEN_PORT
+              value: "{{ ao_github_text_adapter_port }}"
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          ports:
+            - name: ao-mcp-text
+              containerPort: {{ ao_github_text_adapter_port }}
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: ao-mcp-text
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: ao-mcp-text
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: ao-github-text-code
+              mountPath: /opt/ao-mcp-text
+              readOnly: true
+      volumes:
+        - name: ao-github-text-code
+          configMap:
+            name: {{ ao_github_text_configmap_name }}
+            defaultMode: 420

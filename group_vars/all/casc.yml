@@ -30,6 +30,16 @@ controller_credentials:
       client_id: "{{ ao_eda_client_id }}"
       client_secret: "{{ ao_eda_client_secret }}"
     no_log: true
+  # Native credential injection keeps the cluster bearer token out of JT vars.
+  - name: RHEL GitOps MCP Kubernetes
+    description: Cluster credential for configuring the GitHub MCP compatibility sidecar.
+    organization: "{{ demo_organization_name }}"
+    credential_type: OpenShift or Kubernetes API Bearer Token
+    inputs:
+      host: "{{ openshift_api_url }}"
+      bearer_token: "{{ vault_openshift_token }}"
+      verify_ssl: "{{ openshift_validate_certs }}"
+    no_log: true
 controller_credential_types:
   - name: GitHub API Token
     description: Token injected into GitHub API action jobs.
@@ -95,6 +105,46 @@ controller_projects:
     wait: true
 
 controller_templates:
+  - name: JT - GitHub MCP Text Adapter Setup
+    description: Set up the GitHub MCP text compatibility sidecar without changing AO.
+    organization: "{{ demo_organization_name }}"
+    job_type: run
+    inventory: "{{ demo_inventory_name }}"
+    project: "{{ demo_platform_project_name }}"
+    playbook: playbooks/setup/05_configure_github_mcp_text_adapter.yml
+    credentials: [RHEL GitOps MCP Kubernetes]
+    execution_environment: "{{ demo_mcp_setup_execution_environment | default(omit, true) }}"
+    ask_variables_on_launch: true
+    extra_vars:
+      ansible_python_interpreter: "{{ '{{ ansible_playbook_python }}' }}"
+      openshift_vm_namespace: "{{ openshift_vm_namespace }}"
+      demo_ao_github_mcp_url: "{{ demo_ao_github_mcp_url }}"
+      demo_ao_github_text_adapter_enabled: "{{ demo_ao_github_text_adapter_enabled | default(true) | bool }}"
+      demo_ao_github_text_adapter_port: "{{ demo_ao_github_text_adapter_port | default(8083) | int }}"
+      demo_ao_github_text_adapter_image: "{{ demo_ao_github_text_adapter_image | default('registry.access.redhat.com/ubi9/python-312:latest') }}"
+      demo_ao_github_mcp_deployment_name: "{{ demo_ao_github_mcp_deployment_name | default('github-mcp-server') }}"
+      demo_ao_github_mcp_service_name: "{{ demo_ao_github_mcp_service_name | default('github-mcp-server') }}"
+      demo_ao_github_mcp_container_name: "{{ demo_ao_github_mcp_container_name | default('github-mcp-server') }}"
+  - name: JT - GitHub MCP Text Adapter Cleanup
+    description: Remove the GitHub MCP text compatibility sidecar without changing AO.
+    organization: "{{ demo_organization_name }}"
+    job_type: run
+    inventory: "{{ demo_inventory_name }}"
+    project: "{{ demo_platform_project_name }}"
+    playbook: playbooks/cleanup/04_remove_github_mcp_text_adapter.yml
+    credentials: [RHEL GitOps MCP Kubernetes]
+    execution_environment: "{{ demo_mcp_setup_execution_environment | default(omit, true) }}"
+    ask_variables_on_launch: true
+    extra_vars:
+      ansible_python_interpreter: "{{ '{{ ansible_playbook_python }}' }}"
+      openshift_vm_namespace: "{{ openshift_vm_namespace }}"
+      demo_ao_github_mcp_url: "{{ demo_ao_github_mcp_url }}"
+      demo_ao_github_text_adapter_enabled: "{{ demo_ao_github_text_adapter_enabled | default(true) | bool }}"
+      demo_ao_github_text_adapter_port: "{{ demo_ao_github_text_adapter_port | default(8083) | int }}"
+      demo_ao_github_text_adapter_image: "{{ demo_ao_github_text_adapter_image | default('registry.access.redhat.com/ubi9/python-312:latest') }}"
+      demo_ao_github_mcp_deployment_name: "{{ demo_ao_github_mcp_deployment_name | default('github-mcp-server') }}"
+      demo_ao_github_mcp_service_name: "{{ demo_ao_github_mcp_service_name | default('github-mcp-server') }}"
+      demo_ao_github_mcp_container_name: "{{ demo_ao_github_mcp_container_name | default('github-mcp-server') }}"
   - name: JT - RHEL GitOps Reconciliation
     organization: "{{ demo_organization_name }}"
     job_type: run
@@ -238,3 +288,13 @@ eda_rulebook_activations:
     restart_policy: always
     enabled: true
     state: present
+
+# Configure the compatibility dependency before running the AO demo. Cleanup is
+# deliberately a separate confirmed operation, after switching AO to port 8082.
+controller_workflows:
+  - name: WF - GitHub MCP Text Adapter Setup
+    organization: "{{ demo_organization_name }}"
+    simplified_workflow_nodes:
+      - identifier: configure-github-mcp-text
+        unified_job_template: JT - GitHub MCP Text Adapter Setup
+        lookup_organization: "{{ demo_organization_name }}"

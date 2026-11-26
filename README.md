@@ -262,3 +262,7 @@ Use a newer model after validating AO's API/tool compatibility. Set
 Apply these AO and AAP changes together with `playbooks/casc.yml`, which imports
 the workflows and resolves the configured model before configuring AAP. Static
 validation does not update the deployed workflows or model selection.
+
+The current AO release can use embedded GitHub file contents through the
+[GitHub MCP text compatibility sidecar](docs/github-mcp-text-adapter.md), enabled
+by combined CasC. It leaves the installed AO source and image unchanged.

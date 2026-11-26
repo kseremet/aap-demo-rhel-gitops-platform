@@ -10,6 +10,7 @@
   vars_files:
     - ../vault.yml
     - ../group_vars/all/demo_variables.yml
+    - vars/ao_github_mcp_text_adapter.yml
   vars:
     ao_api_base_url: "{{ demo_ao_url | regex_replace('/+$', '') }}/api/v1"
     # AO currently uses Chat Completions. Keep its tool-compatible model
@@ -68,7 +69,7 @@
           token: "{{ vault_github_token }}"
         configuration:
           integration_type: mcp_server
-          base_url: "{{ demo_ao_github_mcp_url }}"
+          base_url: "{{ ao_github_text_adapter_url if (ao_github_text_adapter_enabled | bool) else demo_ao_github_mcp_url }}"
           allow_http: true
           insecure_skip_tls_verify: true
         refresh: true
@@ -87,6 +88,13 @@
       tags:
         - ao
         - validation
+
+    # Deploy the compatibility endpoint before changing the AO integration.
+    # It uses a second port on the already-allowed GitHub MCP service hostname.
+    - name: Configure the GitHub MCP text compatibility endpoint
+      ansible.builtin.include_tasks: ao_configure_github_mcp_text_adapter.yml
+      when: ao_github_text_adapter_enabled | bool
+      tags: [ao, integrations, github_adapter]
 
     - name: Authenticate to Automation Orchestrator as the local admin
       ansible.builtin.uri:

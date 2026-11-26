@@ -37,6 +37,19 @@ Tracks testing progress for this demo. For procedural verification steps, see [s
 
 ## Latest local validation
 
+- 2026-11-26: Deployed a GitHub MCP text compatibility sidecar on the existing
+  GitHub MCP Service hostname, port 8083. Kept AO source, image, operator settings,
+  and allowlist unchanged. Preserved the original MCP port and pinned its
+  upstream container to the already-running digest. AO integration validation
+  succeeded and refreshed the five read-only tools, preserving their UUIDs.
+  Isolated first-node execution `ba1d8122-2a26-427d-b401-bef31e0548bb`
+  completed its scope step with four real GitHub calls and the complete policy
+  YAML in its trace; no checkpoint error occurred. All downstream nodes were
+  skipped. All 129 platform tests passed, including 18 adapter HTTP/SSE and
+  normalization cases. Focused Ansible lint and CasC/cleanup syntax checks
+  passed. A second live setup run reported zero changes. Full incident/PR
+  feedback, maintenance JTs, and teardown remain pending maintainer testing.
+
 - 2026-11-26: The maintainer confirmed combined CasC completed successfully.
   Incident invocation `4065cd0e-697a-48db-84a7-f59af4bcea44` then failed during
   checkpoint serialization. Pod logs confirmed actual GitHub tool calls.
@@ -56,7 +69,8 @@ Tracks testing progress for this demo. For procedural verification steps, see [s
   in memory using the installed MCP adapter factory and a fake MCP session,
   including JSON metadata aliases. The maintainer selected source-patch handoff;
   no AO rollout will be performed by this session. Full live incident/PR and
-  maintainer-feedback runs remain pending the AO maintainer's runtime fix.
+  maintainer-feedback runs remain pending; the compatibility workaround below
+  avoids requiring that runtime rollout.
 
 - 2026-11-26: Fixed AAP template creation failing with "Playbook not found for
   project." The platform Project was still synced to an October 19 revision,
@@ -170,5 +184,7 @@ Tracks testing progress for this demo. For procedural verification steps, see [s
 - The AO runtime currently fails on embedded MCP file resources and omits their
   actual text from model input. The tested fix is prepared under
   `patches/automation-orchestrator/` but requires an AO backend image rollout;
-  workflow imports alone cannot repair it. Keep workflow status Partial until
-  that rollout and full incident/PR feedback tests are confirmed.
+  workflow imports alone cannot repair it. The GitHub MCP text compatibility
+  sidecar now avoids this defect without an AO rollout; the isolated first node
+  passed. Keep workflow status Partial until full incident/PR feedback tests are
+  confirmed.

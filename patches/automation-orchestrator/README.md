@@ -1,5 +1,9 @@
 # AO MCP embedded-resource compatibility fix
 
+For the demo on an unmodified AO installation, use the
+[GitHub MCP text compatibility sidecar](../../docs/github-mcp-text-adapter.md).
+The source patch below remains an optional long-term fix for the AO maintainer.
+
 Status: prepared and verified in memory; **not applied to the running AO**.
 This is an AO backend source fix, separate from the demo workflows and AAP CasC.
 

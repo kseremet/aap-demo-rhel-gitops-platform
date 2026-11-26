@@ -55,6 +55,18 @@ demo_ao_mcp_integration_name: RHEL GitOps Linux MCP
 demo_ao_mcp_url: http://linux-mcp-server:8000/mcp
 demo_ao_github_mcp_integration_name: RHEL GitOps GitHub MCP
 demo_ao_github_mcp_url: http://github-mcp-server:8082/mcp
+# Work around AO's embedded-resource checkpoint bug without changing AO.
+# Adds a text adapter on port 8083 of this existing GitHub MCP Service.
+# false sends AO directly to the original URL after its runtime is fixed.
+demo_ao_github_text_adapter_enabled: true
+demo_ao_github_text_adapter_port: 8083
+demo_ao_github_text_adapter_image: registry.access.redhat.com/ubi9/python-312:latest
+demo_ao_github_mcp_deployment_name: github-mcp-server
+demo_ao_github_mcp_service_name: github-mcp-server
+demo_ao_github_mcp_container_name: github-mcp-server
+# Optional Controller EE for adapter maintenance JTs. It must contain
+# kubernetes.core and its Kubernetes Python SDK (see context/).
+demo_mcp_setup_execution_environment: ""
 demo_ao_project_name: RHEL GitOps Agentic Workflows
 # `container` uses the in-namespace OpenShift Service; set `local` to use the
 # Linux MCP server installed on the AI VM over stdio instead.

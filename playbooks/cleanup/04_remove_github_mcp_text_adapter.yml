@@ -1,0 +1,125 @@
+---
+# First disable compatibility mode and apply CasC so AO uses the original port.
+# Remove only our sidecar/volume/Service port/ConfigMap, retaining GitHub MCP.
+- name: Remove the GitHub MCP text compatibility sidecar # noqa: fqcn[keyword] - project requires collections
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  collections: [kubernetes.core]
+  tags: [ao, github_adapter, cleanup]
+  vars_files:
+    - [../../vault.yml, ../ai/vars/empty.yml]
+    - [../../group_vars/all/demo_variables.yml, ../ai/vars/empty.yml]
+    - ../vars/ao_github_mcp_text_adapter.yml
+  tasks:
+    - name: Require a confirmed rollback to the original GitHub integration port
+      ansible.builtin.assert:
+        that:
+          - not (ao_github_text_adapter_enabled | bool)
+          - demo_github_text_adapter_remove_confirm | default(false) | bool
+        fail_msg: Disable demo_ao_github_text_adapter_enabled, apply CasC, then confirm removal with demo_github_text_adapter_remove_confirm=true.
+
+    - name: Read the existing GitHub MCP workload before removing owned resources
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: "{{ ao_github_text_deployment_name }}"
+        namespace: "{{ openshift_vm_namespace }}"
+        host: "{{ ao_github_text_kube_host }}"
+        api_key: "{{ ao_github_text_kube_token }}"
+        validate_certs: "{{ ao_github_text_kube_verify }}"
+      register: _adapter_cleanup_deployment
+      no_log: true
+
+    - name: Remove the owned compatibility sidecar and source volume
+      kubernetes.core.k8s:
+        state: patched
+        merge_type: [strategic-merge]
+        host: "{{ ao_github_text_kube_host }}"
+        api_key: "{{ ao_github_text_kube_token }}"
+        validate_certs: "{{ ao_github_text_kube_verify }}"
+        definition:
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: "{{ ao_github_text_deployment_name }}"
+            namespace: "{{ openshift_vm_namespace }}"
+          spec:
+            template:
+              metadata:
+                annotations:
+                  aap-workbench.github-mcp-text/source-sha256: null
+              spec:
+                containers:
+                  - name: ao-text-adapter
+                    $patch: delete
+                volumes:
+                  - name: ao-github-text-code
+                    $patch: delete
+      when:
+        - _adapter_cleanup_deployment.resources | length == 1
+        - >-
+          'aap-workbench.github-mcp-text/source-sha256' in
+          (_adapter_cleanup_deployment.resources[0].spec.template.metadata.annotations | default({}))
+      no_log: true
+
+    - name: Read the Service before removing its owned compatibility port
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Service
+        name: "{{ ao_github_text_service_name }}"
+        namespace: "{{ openshift_vm_namespace }}"
+        host: "{{ ao_github_text_kube_host }}"
+        api_key: "{{ ao_github_text_kube_token }}"
+        validate_certs: "{{ ao_github_text_kube_verify }}"
+      register: _adapter_cleanup_service
+
+    - name: Remove only the named adapter port
+      kubernetes.core.k8s:
+        state: patched
+        merge_type: [strategic-merge]
+        host: "{{ ao_github_text_kube_host }}"
+        api_key: "{{ ao_github_text_kube_token }}"
+        validate_certs: "{{ ao_github_text_kube_verify }}"
+        definition:
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: "{{ ao_github_text_service_name }}"
+            namespace: "{{ openshift_vm_namespace }}"
+          spec:
+            ports:
+              - port: "{{ item.port }}"
+                protocol: "{{ item.protocol | default('TCP') }}"
+                $patch: delete
+      loop: >-
+        {{ (_adapter_cleanup_service.resources[0].spec.ports | default([])
+            | selectattr('name', 'equalto', 'ao-mcp-text') | list)
+           if (_adapter_cleanup_service.resources | length == 1) else [] }}
+      loop_control:
+        label: "{{ item.port }}"
+
+    - name: Read the source ConfigMap ownership
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: ConfigMap
+        name: "{{ ao_github_text_configmap_name }}"
+        namespace: "{{ openshift_vm_namespace }}"
+        host: "{{ ao_github_text_kube_host }}"
+        api_key: "{{ ao_github_text_kube_token }}"
+        validate_certs: "{{ ao_github_text_kube_verify }}"
+      register: _adapter_cleanup_code
+
+    - name: Remove the owned adapter source ConfigMap
+      kubernetes.core.k8s:
+        state: absent
+        api_version: v1
+        kind: ConfigMap
+        name: "{{ ao_github_text_configmap_name }}"
+        namespace: "{{ openshift_vm_namespace }}"
+        host: "{{ ao_github_text_kube_host }}"
+        api_key: "{{ ao_github_text_kube_token }}"
+        validate_certs: "{{ ao_github_text_kube_verify }}"
+      when:
+        - _adapter_cleanup_code.resources | length == 1
+        - (_adapter_cleanup_code.resources[0].metadata.labels | default({})).get('app.kubernetes.io/component') == 'github-mcp-text-adapter'

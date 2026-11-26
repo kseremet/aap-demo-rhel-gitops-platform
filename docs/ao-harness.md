@@ -304,6 +304,14 @@ file text in model history and traces and keeping artifacts JSON-safe. It requir
 an AO backend image rollout and is not applied by `playbooks/casc.yml`.
 The demo does not modify installed AO packages or its global system prompt.
 
+For the current unmodified AO deployment, CasC now enables a
+[GitHub MCP text compatibility sidecar](github-mcp-text-adapter.md). It converts
+embedded file bodies to text on the existing GitHub MCP hostname, port 8083.
+Live integration validation succeeded, and an isolated first-node test completed
+with real file contents in its tool trace and no checkpoint error. Both workflows
+share this integration; no workflow prompt/schema change is required for the
+transport workaround. Full incident and PR feedback tests remain pending.
+
 The evidence validator accepts pinned file reads expressed through either GitHub
 MCP argument name, `sha` or `ref`. Both require the exact inspected commit; a
 moving branch or conflicting aliases are rejected.

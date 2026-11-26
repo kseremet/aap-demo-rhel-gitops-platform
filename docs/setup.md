@@ -228,6 +228,21 @@ The CasC playbook checks for the existing `GitHub AI Incident Issues`
 activation and disables it before applying updates. This handles EDA's
 requirement that stopped activations be disabled before they can be updated.
 
+## GitHub MCP compatibility on the existing AO version
+
+The installed AO MCP adapter cannot checkpoint embedded GitHub file resources.
+Combined CasC configures a standard-library Python sidecar on the existing GitHub
+MCP Deployment and points the GitHub integration at its extra Service port.
+No AO source or image change is required. The existing GitHub MCP Deployment and
+Service must be present; their names are configurable in demo variables.
+
+See [the adapter setup, Controller jobs, verification, and rollback guide](github-mcp-text-adapter.md).
+The standalone setup is `playbooks/setup/05_configure_github_mcp_text_adapter.yml`;
+its teardown is `playbooks/cleanup/04_remove_github_mcp_text_adapter.yml`.
+Both are also exposed as AAP maintenance job templates. Kubernetes access uses
+the existing OpenShift API/token settings, or Controller's native Kubernetes
+bearer credential. The original GitHub MCP port and credential remain available.
+
 ## PR review feedback loop
 
 The platform also provides `JT - AI PR Review`. Enable these additional GitHub
