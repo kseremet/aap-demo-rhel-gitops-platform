@@ -211,15 +211,19 @@ optional and removes their execution/version history. Export them first if you
 want a clean recreation. Delete only `rhel-gitops-incident-investigation` and
 `rhel-gitops-pr-review`; retain their project, integrations, and credentials.
 
-Because this revision adds a new playbook, sync the AAP platform Project to the
-new commit before CasC if Controller validates playbook availability during job
-template creation.
+CasC forces a platform Project sync and waits for completion in the projects
+role before creating job templates. This refreshes the playbook catalog even when
+the Project configuration itself is unchanged. `scm_update_on_launch` only updates
+the Project at job launch, so it cannot supply a missing playbook during template
+creation. New playbooks must already be committed to the configured SCM branch.
+A failed sync stops CasC before template creation.
 
 After CasC completes:
 
 1. Confirm CasC created **JT - AO Evidence Validation** alongside the writer.
-   Sync the AAP `rhel-gitops-platform` project (or your configured project name)
-   and confirm its SCM revision contains the new writer and filter plugin.
+   Confirm the AAP `rhel-gitops-platform` project (or your configured project
+   name) synced successfully and its SCM revision contains the writer,
+   evidence-validator playbook, and filter plugins.
 2. Sync the EDA `RHEL GitOps EDA` project if needed and confirm the GitHub rulebook
    activation is enabled. CasC refreshes the bridge's AO service-account credential.
 3. Open both imported AO workflows and publish their latest versions. An existing

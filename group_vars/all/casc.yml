@@ -89,6 +89,10 @@ controller_projects:
     scm_url: "{{ demo_platform_scm_url }}"
     scm_branch: "{{ demo_platform_scm_branch }}"
     scm_update_on_launch: true
+    # Job template creation validates the synced playbook catalog before launch.
+    # Force the projects role to refresh unchanged projects and wait for completion.
+    update_project: true
+    wait: true
 
 controller_templates:
   - name: JT - RHEL GitOps Reconciliation

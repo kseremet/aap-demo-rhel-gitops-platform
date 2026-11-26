@@ -24,7 +24,7 @@ Tracks testing progress for this demo. For procedural verification steps, see [s
 |---|---|---|---|
 | AO GitOps Action (`ai/run_ao_gitops_action.yml`) | Partial | 2026-11-26 | Reviewed plan/report contract, pinned branch/blob checks, consumed-variable and exact YAML delta validation, full PR reporting, and atomic multi-file commit publication implemented. Offline fake-API tests cover create/revise and zero mutations on preflight failure. Syntax and offline lint passed; live AAP/GitHub validation is pending. |
 
-| AO Evidence Validation (`ai/validate_ao_evidence.yml`) | Partial | 2026-11-26 | Read-only runtime provenance, commit/host scope, exact excerpts, typed JSON fields, and blocker resolution checks implemented. Local Ansible execution returns routable valid/blocked artifacts. Live AAP job validation remains pending. |
+| AO Evidence Validation (`ai/validate_ao_evidence.yml`) | Partial | 2026-11-26 | Read-only runtime provenance, commit/host scope, exact excerpts, typed JSON fields, and blocker resolution checks implemented. Local Ansible execution returns routable valid/blocked artifacts. Live CasC creation succeeded after refreshing the platform Project; live AAP job execution remains pending. |
 
 | AO Event Bridge (`ai/forward_event_to_ao.yml`) | Partial | 2026-11-26 | Clean SCM checkout test passed without ignored local configuration files. CasC explicitly enables launch variables and supplies TLS configuration. Live EDA-to-AO validation remains pending. |
 
@@ -36,6 +36,22 @@ Tracks testing progress for this demo. For procedural verification steps, see [s
 | AO PR review (`rhel-gitops-pr-review.yaml`) | Partial | 2026-11-26 | Uses the same evidence/review harness while preserving PR identity and distinguishing revision requests from questions/approval. Importer substitutions, AO schemas, and routing checks passed. Explicit read-only tools, runtime evidence validation, and blocker gates added. Deployed AO API validation passed; live maintainer-feedback validation remains pending. |
 
 ## Latest local validation
+
+- 2026-11-26: Fixed AAP template creation failing with "Playbook not found for
+  project." The platform Project was still synced to an October 19 revision,
+  before the evidence-validator playbook existed. Added `update_project: true`
+  and `wait: true` to its CasC declaration so the projects role refreshes the
+  catalog before job templates are processed, even when Project settings have
+  not changed. Ran the actual project and job-template CasC roles against AAP:
+  20 tasks passed, two changed, zero failures. AAP synced to `365ed84`, exposed
+  `playbooks/ai/validate_ao_evidence.yml`, and created **JT - AO Evidence
+  Validation**. No workflow, managed-host job, or publication job was launched.
+  Combined CasC syntax and focused offline lint of the AAP playbook/CasC vars
+  passed with vendored collections excluded. The unfiltered AAP playbook lint
+  reports ten pre-existing naming/line-length findings in the installed
+  `infra.aap_configuration` collection; no vendor files were changed. Full CasC
+  completion and evidence-validator job execution remain pending maintainer
+  live testing.
 
 - 2026-11-26: Preserved the Linux connection UI workaround in CasC with a
   dedicated non-secret HTTP Bearer Token credential named by the Linux MCP
