@@ -59,13 +59,17 @@ is limited to 64 files and 128 KiB of source text, not silent truncation.
 The same job runs Ansible setup on the target with privilege escalation to read
 identity, device, filesystem, and LVM facts. It does not change configuration.
 Only selected facts are returned; environment variables and SSH credentials are
-not included. The investigator uses read-only Linux/GitHub MCP tools for the
+not included. Up to eight kernel keys explicitly named by an event are also read
+through bounded `/proc/sys` slurps. No sysctl command or write is executed. This
+supplies actual measurements without relying on a model's tool choice. Unavailable
+reads remain explicit gaps; the investigator may attempt a focused MCP read. The investigator uses read-only Linux/GitHub MCP tools for the
 specific missing measurements, with a prompt budget of 12 calls. The reviewer
 has 8 calls for focused challenge. These are reasoning budgets, not engine
 resource quotas. Neither role has write tools.
 
-A fixed helper creates evidence IDs from successful collection and runtime tool
-results. The proposer selects IDs; code supplies exact source paths, excerpts,
+A fixed helper creates short case-local evidence IDs (`E01`, `E02`, ...) from
+successful collection and runtime tool results. Code binds each ID to an immutable
+record; the model does not have to copy long hashes. The proposer selects IDs; code supplies exact source paths, excerpts,
 repository identity, blob SHAs, and PR identity. Agents cannot supply invented
 citations. AAP still checks successful paired calls/results, pinned revision,
 target identity, exact excerpts, host and repository support, and unresolved
@@ -129,6 +133,8 @@ The PR body is rendered from the final structured assessment, not a model-writte
 one-line summary. It includes incident context, observations and sources, diagnosis,
 reconciliation and scope, exact proposed values, alternatives, pending validation,
 limitations, automated-review findings, and the AO execution / inspected commit.
+Each citation includes a labeled preview of the matched tool output; complete
+matched excerpts remain in AAP artifacts when a preview is shortened.
 A revision refreshes the body and posts a marked summary comment that EDA ignores.
 AAP artifacts expose the resulting PR URL and commit.
 
@@ -153,6 +159,8 @@ ansible-playbook playbooks/casc.yml
 Use `--vault-id @prompt` when your vault is encrypted. The platform AAP project
 must sync to the pushed revision before creating **JT - AO Collect Evidence**.
 That template uses the fleet inventory, machine credential and GitHub API Access.
+Combined CasC reuses the verified running VMI addresses for both MCP and AAP
+SSH inventory, while preserving local generated files and unrelated host variables.
 Both the evidence validator and writer must use this same platform revision.
 Refresh the AO editor and publish each updated draft before running mock data.
 

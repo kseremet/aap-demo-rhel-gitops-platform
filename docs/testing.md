@@ -24,6 +24,8 @@ Tracks testing progress for this demo. For procedural verification steps, see [s
 |---|---|---|---|
 | AO GitOps Action (`ai/run_ao_gitops_action.yml`) | Partial | 2026-11-26 | Reviewed plan/report contract, pinned branch/blob checks, consumed-variable and exact YAML delta validation, full PR reporting, and atomic multi-file commit publication implemented. Offline fake-API tests cover create/revise and zero mutations on preflight failure. Syntax and offline lint passed; live AAP/GitHub validation is pending. |
 
+| AO Collect Evidence (`ai/collect_ao_evidence.yml`) | Partial | 2026-11-26 | Local snapshot/identity/secret-exclusion regressions and isolated live AAP collection passed. Full incident and PR-feedback runs remain pending. |
+
 | AO Evidence Validation (`ai/validate_ao_evidence.yml`) | Partial | 2026-11-26 | Read-only runtime provenance, commit/host scope, exact excerpts, typed JSON fields, and blocker resolution checks implemented. Local Ansible execution returns routable valid/blocked artifacts. Live CasC creation succeeded after refreshing the platform Project; live AAP job execution remains pending. |
 
 | AO Event Bridge (`ai/forward_event_to_ao.yml`) | Partial | 2026-11-26 | Clean SCM checkout test passed without ignored local configuration files. CasC explicitly enables launch variables and supplies TLS configuration. Live EDA-to-AO validation remains pending. |
@@ -37,11 +39,29 @@ Tracks testing progress for this demo. For procedural verification steps, see [s
 
 ## Current harness validation
 
-The three-agent simplification, observed-value proposals, read-only collection,
-and measured LV growth guards passed the local regression suite. Focused Ansible
-lint and deployed AO API validation passed with zero workflow findings. The
-updated adapter helper deployed successfully. Isolated collection validation
-is recorded below when completed.
+- Three-agent simplification: investigate, propose, independently review; no
+  refinement loop. The regression suite passed 198 checks, including real AO
+  schema, routing, variable-reference and visual-editor checks. Focused Ansible
+  lint passed. Both deployed AO definitions validated with zero findings.
+- Read-only AAP collection job `6431` succeeded on `web-01` with zero changes,
+  collecting 22 hash-verified repository files, target identity, filesystem/device
+  facts, and real LV/VG free capacity. No environment variables or credentials
+  were exported. AAP's stale fleet SSH addresses were aligned with running VMIs;
+  combined CasC now reuses the same verified addresses as Linux MCP without
+  rewriting local generated files.
+- Isolated investigator testing confirmed actual `read_file` execution and the
+  measured somaxconn value `65535` versus active baseline `1024`. Prompts require
+  relevant target measurements and keep historical intent/human approval out of
+  diagnostic gaps. Candidate scope can address peer concerns; independent review
+  and deterministic measurement/capacity gates still reject unsupported edits.
+- Bounded named-key `/proc/sys` slurps and short case-local evidence IDs were
+  added after live tests exposed unreliable model tool choice and a mistyped
+  long evidence ID. Regression checks prove genuine AAP measurements can support
+  an observed-value proposal while context-only or invented evidence cannot.
+- The updated fixed adapter helper deployed successfully. The temporary probes
+  contain no publication node. Final three-agent probe results are recorded below
+  when complete. No real PR was created by these checks.
+
 Full incident-to-PR and maintainer-feedback tests remain pending; status is Partial.
 
 ## Latest local validation

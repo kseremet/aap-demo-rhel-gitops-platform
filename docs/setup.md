@@ -218,11 +218,14 @@ Import these workflow definitions into Automation Orchestrator:
 - `workflows/automation-orchestrator/rhel-gitops-incident.yaml`
 - `workflows/automation-orchestrator/rhel-gitops-pr-review.yaml`
 
-Configure the EDA trigger paths in the workflow definitions to match the two
-variables above. Configure the existing AAP and LLM integrations, select the
-new MCP integration pointing to the in-namespace `linux-mcp-server` Service,
-and map the task-agent profiles/models to the available AO resources. This
-phase intentionally does not automate AO installation or integration creation.
+Combined CasC supplies the EDA paths, discovered model/tool IDs, integration
+credentials, and native HTTP helper URLs automatically. It also configures
+**JT - AO Collect Evidence** with the fleet inventory, SSH machine credential,
+and GitHub API Access. The platform project must sync the pushed revision before
+AAP creates that template. The same verified VMI discovery refreshes both MCP
+aliases and AAP fleet addresses, preserving local generated files. Publish both
+updated AO drafts before testing. See the [three-agent harness](ao-harness.md)
+for generic drift/capacity mock events and the strict publication gates.
 
 The CasC playbook checks for the existing `GitHub AI Incident Issues`
 activation and disables it before applying updates. This handles EDA's

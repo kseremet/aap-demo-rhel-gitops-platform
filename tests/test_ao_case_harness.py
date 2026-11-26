@@ -351,10 +351,139 @@ def test_feedback_keeps_original_pr_and_target_marker(handoff):
     assert result["plan"]["pull_request_number"] == 8
 
 
-def test_explicit_critical_gaps_cannot_be_dropped_by_the_proposer(handoff):
+def test_scope_concerns_can_be_resolved_by_a_narrow_proposal_but_review_stays_strict(
+    handoff,
+):
     case, raw = compiled(handoff)
-    case["view"]["investigation"] = {"critical_gaps": ["No measured backing capacity"]}
+    case["view"]["investigation"] = {
+        "critical_gaps": ["Peer workload equivalence is unknown"]
+    }
+    raw["report"]["scope"] = "web-01 only; do not change peers without measurements"
     result = harness.compile_proposal(case, raw, "execution")
-    assert result["report"]["decision"] == "blocked"
-    assert result["report"]["blocking_findings"] == ["No measured backing capacity"]
-    assert result["plan"] is None
+    assert result["report"]["decision"] == "ready"
+    assert validator.validate_evidence(
+        result["report"], result["packet"], {"blocking_findings": []}, REPO
+    )["valid"]
+    assert not validator.validate_evidence(
+        result["report"],
+        result["packet"],
+        {"blocking_findings": ["The actual proposed scope is not justified"]},
+        REPO,
+    )["valid"]
+
+
+def test_prompts_use_measured_views_without_duplicating_raw_packets():
+    import yaml
+
+    for path in (ROOT / "workflows/automation-orchestrator").glob("*.yaml"):
+        nodes = {n["id"]: n for n in yaml.safe_load(path.read_text())["nodes"]}
+        first = nodes["input_investigate"]["parameters"]["body"]["contexts"][0]
+        assert "packet" not in first
+        assert "repository_files" in first and "host_facts" in first
+        assert set(nodes["input_review"]["parameters"]["body"]["contexts"][0]) == {
+            "report",
+            "plan",
+        }
+        assert (
+            nodes["validate_evidence"]["parameters"]["extra_vars"]["ao_evidence"]
+            == "${compile_proposal.result.body.packet}"
+        )
+
+
+@pytest.mark.parametrize("value", ["65535", "100000"])
+def test_adoption_plan_must_declare_its_verified_value(handoff, value):
+    plan, report, review = handoff
+    report["proposal_basis"] = {"kind": "adopt_observed", "proposed_value": value}
+    if value == "65535":
+        writer.validate_plan(plan, report, review, REPO)
+    else:
+        with pytest.raises(AnsibleFilterError, match="actually declare"):
+            writer.validate_plan(plan, report, review, REPO)
+
+
+def test_pr_report_includes_measured_output_with_bounded_labeled_previews(handoff):
+    plan, report, review = handoff
+    report["evidence"][0]["tool_output_excerpt"] = "65535\n"
+    report["evidence"][1]["tool_output_excerpt"] = "x" * 1500 + "```"
+    rendered = writer.render_report(report, plan, review, "execution")
+    import re
+
+    assert re.search(r"```text\s+65535\s+```", rendered)
+    assert (
+        "first 1000 characters; complete matched excerpt retained in AAP artifacts"
+        in rendered
+    )
+    assert "x" * 1001 not in rendered
+
+
+def test_requested_kernel_keys_are_bounded_reads_not_paths_or_commands():
+    assert collect.requested_sysctls(
+        {"description": "Compare net.core.somaxconn and vm.swappiness."}
+    ) == ["net.core.somaxconn", "vm.swappiness"]
+    assert collect.requested_sysctls({"description": "/etc/shadow --all; $HOME"}) == []
+    with pytest.raises(AnsibleFilterError):
+        collect.requested_sysctls(
+            {"description": " ".join("net.test.key" + str(i) for i in range(9))}
+        )
+
+
+def test_foundation_supplies_requested_sysctl_measurement_without_model_tool_choice():
+    snapshot_data, _, _ = snapshot()
+    snapshot_data["request"] = {"description": "Investigate net.core.somaxconn"}
+    result = collect.finish_collection(
+        snapshot_data,
+        {"hostname": "web-01"},
+        ["web_servers"],
+        123,
+        [
+            {
+                "item": "net.core.somaxconn",
+                "encoding": "base64",
+                "source": "/proc/sys/net/core/somaxconn",
+                "content": base64.b64encode(b"65535\n").decode(),
+            }
+        ],
+    )
+    assert result["host_facts"]["sysctl"]["net.core.somaxconn"] == "65535"
+    case = harness.prepare_case(result, {})
+    evidence = next(
+        e for e in case["registry"].values() if e["tool"] == "ansible_slurp"
+    )
+    assert evidence["tool_output_excerpt"] == "65535\n"
+    assert len(evidence["id"]) == 3
+
+
+def test_real_foundation_measurement_can_support_adoption_without_mcp_call(handoff):
+    data, _, _ = snapshot()
+    data["request"] = {"description": "Investigate net.core.somaxconn"}
+    collection = collect.finish_collection(
+        data,
+        {"hostname": "web-01"},
+        ["web_servers"],
+        123,
+        [
+            {
+                "item": "net.core.somaxconn",
+                "encoding": "base64",
+                "source": "/proc/sys/net/core/somaxconn",
+                "content": base64.b64encode(b"65535\n").decode(),
+            }
+        ],
+    )
+    case = harness.prepare_case(collection, {})
+    _, raw = compiled(handoff)
+    ids = list(case["registry"])
+    raw["report"]["evidence_ids"] = ids
+    raw["report"]["proposal_basis"]["measurement_evidence_id"] = next(
+        k for k, v in case["registry"].items() if v["tool"] == "ansible_slurp"
+    )
+    raw["plan"]["files"][0]["evidence_ids"] = ids
+    result = harness.compile_proposal(case, raw, "real-foundation")
+    verdict = validator.validate_evidence(
+        result["report"], result["packet"], {"blocking_findings": []}, REPO
+    )
+    assert verdict["valid"], verdict
+    assert all(
+        r["tool"] != "read_handoff"
+        for r in validator.successful_results(result["packet"])
+    )

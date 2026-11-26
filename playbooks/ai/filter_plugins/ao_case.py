@@ -154,6 +154,25 @@ def collection_paths(tree, target):
     return sorted(selected, key=lambda i: i["path"])
 
 
+def requested_sysctls(event):
+    """Extract at most eight named kernel keys, never arbitrary file paths."""
+    text = json.dumps(event, ensure_ascii=False)
+    keys = sorted(
+        set(
+            key.rstrip(".")
+            for key in re.findall(
+                r"(?<![A-Za-z0-9_./-])(?:net|vm|fs|kernel|dev)(?:\.[a-zA-Z0-9_-]+)+\.?(?=$|[^a-zA-Z0-9_./-])",
+                text,
+            )
+        )
+    )
+    require(
+        len(keys) <= 8,
+        "Event names too many sysctl keys; narrow the diagnostic request",
+    )
+    return keys
+
+
 def trace_record(tool, args, output):
     identifier = (
         "ev-"
@@ -235,7 +254,7 @@ def repository_snapshot(context, commit, tree, responses):
     )
 
 
-def finish_collection(snapshot, facts, inventory_groups, job_id):
+def finish_collection(snapshot, facts, inventory_groups, job_id, sysctl_results=None):
     # Never export ansible_env, SSH inputs, hostvars, or controller credentials.
     keys = (
         "hostname",
@@ -270,6 +289,32 @@ def finish_collection(snapshot, facts, inventory_groups, job_id):
         {"host": snapshot["target_host"], "job_id": str(job_id)},
         json.dumps(selected, sort_keys=True),
     )
+    selected["sysctl"] = {}
+    for reading in sysctl_results or []:
+        key = reading["item"]
+        require(
+            key in requested_sysctls(snapshot["request"]),
+            "Unexpected requested sysctl key",
+        )
+        path = "/proc/sys/" + key.replace(".", "/")
+        if (
+            reading.get("encoding") == "base64"
+            and reading.get("source") == path
+            and reading.get("content")
+        ):
+            raw = base64.b64decode(reading["content"]).decode("utf-8")
+            require(
+                len(raw) <= 4096,
+                "Requested kernel parameter exceeds evidence size limit",
+            )
+            selected["sysctl"][key] = raw.strip()
+            packet["sysctl:" + key] = trace_record(
+                "ansible_slurp",
+                {"host": snapshot["target_host"], "path": path, "job_id": str(job_id)},
+                raw,
+            )
+        else:
+            selected.setdefault("unavailable_sysctls", []).append(key)
     packet["collection_complete"] = True
     packet["inventory_groups"] = list(inventory_groups)
     result["packet"] = packet
@@ -280,6 +325,7 @@ class FilterModule:
     def filters(self):
         return {
             "ao_request_context": request_context,
+            "ao_requested_sysctls": requested_sysctls,
             "ao_collection_paths": collection_paths,
             "ao_repository_snapshot": repository_snapshot,
             "ao_finish_collection": finish_collection,

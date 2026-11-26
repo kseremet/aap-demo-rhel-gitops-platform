@@ -14,6 +14,7 @@ def require(condition, message):
 
 def evidence_registry(packet, context, host):
     entries = {}
+    fingerprints = set()
     for record in successful_results(packet):
         args = record["input"]
         tool = record["tool"]
@@ -38,12 +39,15 @@ def evidence_registry(packet, context, host):
                 excerpt = max(parsed, key=len, default=raw)
         except ValueError:
             pass
-        identifier = (
-            "ev-"
-            + hashlib.sha256(
-                json.dumps([tool, args, raw], sort_keys=True).encode()
-            ).hexdigest()[:16]
-        )
+        fingerprint = hashlib.sha256(
+            json.dumps([tool, args, raw], sort_keys=True).encode()
+        ).hexdigest()
+        if fingerprint in fingerprints:
+            continue
+        fingerprints.add(fingerprint)
+        # IDs are immutable within this case and easy to transcribe. Integrity
+        # comes from the code-bound record, not asking a model to copy a hash.
+        identifier = "E" + str(len(entries) + 1).zfill(2)
         entries[identifier] = {
             "id": identifier,
             "tool": tool,
@@ -107,12 +111,6 @@ def compile_proposal(case, proposal, execution_id, branch_prefix="aiops/"):
     if isinstance(basis, dict):
         basis["requires_maintainer_approval"] = True
         basis["evidence_ids"] = selected
-    gaps = case["view"].get("investigation", {}).get("critical_gaps", [])
-    if gaps:
-        report["blocking_findings"] = list(
-            dict.fromkeys(report.get("blocking_findings", []) + gaps)
-        )
-        report["decision"] = "blocked"
     raw = proposal.get("plan")
     plan = None
     if report.get("decision") == "ready":

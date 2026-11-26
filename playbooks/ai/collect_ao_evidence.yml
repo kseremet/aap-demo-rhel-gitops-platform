@@ -114,11 +114,24 @@
       changed_when: false
       no_log: true
 
+    # Kernel keys named by the event can be read deterministically as bounded
+    # /proc scalars. This is not a command runner and cannot write a sysctl.
+    # Other evidence gaps remain available to the investigative MCP tools.
+    - name: Read the requested runtime kernel parameters without changing them
+      ansible.builtin.slurp:
+        src: "{{ '/proc/sys/' ~ (item | replace('.', '/')) }}"
+      loop: "{{ hostvars['localhost']._request.request | ao_requested_sysctls }}"
+      register: _sysctl_reads
+      failed_when: false
+      changed_when: false
+      no_log: true
+
     - name: Return only selected measurements and the verified source packet
       ansible.builtin.set_stats:
         data:
           ao_collection: >-
             {{ hostvars['localhost']._snapshot | ao_finish_collection(
-               _facts.ansible_facts, group_names, awx_job_id | default('local-read-only-collection')) }}
+               _facts.ansible_facts, group_names, awx_job_id | default('local-read-only-collection'),
+               _sysctl_reads.results | default([])) }}
         per_host: false
       no_log: true

@@ -91,3 +91,44 @@ def test_live_address_refresh_preserves_ssh_identity_and_other_aliases():
         task["ansible.builtin.set_fact"]
     )
     assert result["_ao_mcp_ssh_config"] == before.replace("10.128.1.31", "10.130.0.234")
+
+
+def test_casc_reuses_verified_vmi_addresses_without_rewriting_local_inventory():
+    tasks = yaml.safe_load((ROOT / "playbooks/aap_config.yml").read_text())[0][
+        "pre_tasks"
+    ]
+    task = next(
+        t
+        for t in tasks
+        if t["name"] == "Keep AAP fleet addresses aligned with the verified MCP targets"
+    )
+    loader = DataLoader()
+    source = loader.load_from_file(
+        str(ROOT / "playbooks/aap_config.yml"), trusted_as_template=True
+    )[0]
+    task = next(t for t in source["pre_tasks"] if t["name"] == task["name"])
+    hosts = [
+        {
+            "name": "web-01",
+            "variables": {"ansible_host": "old", "ansible_user": "cloud-user"},
+        },
+        {"name": "external", "variables": {"ansible_host": "keep"}},
+    ]
+    item = {
+        "item": {"key": "web-01"},
+        "resources": [
+            {"status": {"interfaces": [{"name": "default", "ipAddress": "10.0.0.20"}]}}
+        ],
+    }
+    variables = {"controller_hosts": hosts, "item": item, **task["vars"]}
+    result = Templar(loader=loader, variables=variables).template(
+        task["ansible.builtin.set_fact"]
+    )["controller_hosts"]
+    assert result == [
+        hosts[1],
+        {
+            "name": "web-01",
+            "variables": {"ansible_host": "10.0.0.20", "ansible_user": "cloud-user"},
+        },
+    ]
+    assert hosts[0]["variables"]["ansible_host"] == "old"

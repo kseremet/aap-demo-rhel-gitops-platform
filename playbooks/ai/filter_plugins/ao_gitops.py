@@ -255,6 +255,18 @@ def validate_plan(plan, report, review, repository_url, branch_prefix="aiops/"):
         )
         load_variables(item.get("content"))
         paths.append(path)
+    basis = report.get("proposal_basis") or {}
+    if basis.get("kind") == "adopt_observed":
+        require(
+            any(
+                isinstance(change, dict)
+                and str(change.get("after")).strip()
+                == str(basis.get("proposed_value")).strip()
+                for item in files
+                for change in item["setting_changes"]
+            ),
+            "Observed-value proposal must actually declare the verified proposed value",
+        )
     require(len(paths) == len(set(paths)), "Duplicate file paths are not allowed")
     require(
         sorted(review.get("reviewed_paths", [])) == sorted(paths),
@@ -427,6 +439,11 @@ def validate_storage_edit(item, path, proposed, report, packet):
                             "Ambiguous storage declarations require explicit precedence evidence",
                         )
                         values[key] = value
+    for key in proposed:
+        require(
+            key not in values or same(values[key], proposed[key]),
+            "Extend the existing storage declaration in its current file; a second file must not shadow another managed mapping",
+        )
     values.update(proposed)
 
     def merge(left, right):
@@ -501,6 +518,22 @@ def render_report(report, plan, review, execution):
         lines.append(
             f"- **{item['id']}** — `{item['tool']}` — {item['source']}: {item['observation']}"
         )
+        excerpt = item.get("tool_output_excerpt", "")
+        if text(excerpt):
+            label = "Matched tool output"
+            if len(excerpt) > 1000:
+                label += " (first 1000 characters; complete matched excerpt retained in AAP artifacts)"
+            # Keep Markdown in untrusted tool data inside a fixed code block.
+            lines.extend(
+                [
+                    "",
+                    label + ":",
+                    "```text",
+                    excerpt[:1000].replace("```", "` ` `"),
+                    "```",
+                    "",
+                ]
+            )
     lines.extend(
         [
             "## Reconciliation and Scope",

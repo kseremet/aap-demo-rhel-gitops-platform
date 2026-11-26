@@ -32,6 +32,7 @@ LINUX_TOOLS = {
     "get_hardware_information",
     "list_block_devices",
     "ansible_setup",
+    "ansible_slurp",
 }
 REPO_READ_TOOLS = {"get_file_contents", "github_api_get_file"}
 COMMIT_TOOLS = {"get_commit", "github_api_get_commit"}
@@ -377,7 +378,7 @@ def validate_evidence(report, packet, review, repository_url):
             )
             and matches_output(excerpt, r["output"])
             and (
-                r["tool"] not in ({"read_file"} | REPO_READ_TOOLS)
+                r["tool"] not in ({"read_file", "ansible_slurp"} | REPO_READ_TOOLS)
                 or (
                     isinstance(r["input"].get("path"), str)
                     and bool(r["input"]["path"])
