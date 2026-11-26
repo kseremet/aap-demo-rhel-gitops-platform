@@ -67,10 +67,14 @@ def test_schema_contracts_and_graph(path):
             schema = node["parameters"]["response_schema"]
             jsonschema.Draft7Validator.check_schema(schema)
             jsonschema.validate(example(schema), schema)
+            prompt = node["parameters"]["prompt"]
+            assert json.dumps(schema, separators=(",", ":")) not in prompt
             assert (
-                json.dumps(schema, separators=(",", ":"))
-                in node["parameters"]["prompt"]
+                "Response contract (also enforced as the response schema):"
+                not in prompt
             )
+            assert "Final handoff:" in prompt
+            assert "configured response schema" in prompt
             assert node["parameters"]["llm_model_id"] == "__AO_LLM_MODEL_ID__"
             assert node["settings"]["continue_on_failure"] is False
     assert nodes["publish_proposal"]["settings"]["retry_policy"]["max_retries"] == 0

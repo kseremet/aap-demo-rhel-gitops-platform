@@ -110,12 +110,11 @@ nodes:
       Original event:
       ${trigger}
 
-      Final handoff: return a self-contained JSON object matching the contract below.
-      Include all observations, exact values, source references, uncertainty, and
-      justification needed downstream in this final answer; later steps do not receive
-      your tool transcript. Use null/empty arrays for unknowns without inventing facts.
-      Response contract (also enforced as the response schema):
-      {"type":"object","additionalProperties":false,"properties":{"incident":{"type":"string"},"target_host":{"type":["string","null"]},"repository_context":{"type":"object","additionalProperties":false,"properties":{"owner":{"type":["string","null"]},"repository":{"type":["string","null"]},"base_branch":{"type":["string","null"]},"head_branch":{"type":["string","null"]},"read_commit":{"type":["string","null"]},"pull_request_number":{"type":["integer","null"]}},"required":["owner","repository","base_branch","head_branch","read_commit","pull_request_number"]},"requirements":{"type":"array","items":{"type":"string"}},"needs_revision":{"type":["boolean","null"]},"unanswered_questions":{"type":"array","items":{"type":"string"}}},"required":["incident","target_host","repository_context","requirements","needs_revision","unanswered_questions"]}
+      Final handoff: Preserve the incident, requirements, verified target host, repository owner/name,
+      base/head branches, inspected commit SHA, PR number when applicable, whether
+      feedback requests a revision, and unresolved questions.
+      Make this answer self-contained: later steps do not receive your tool transcript.
+      Keep unknowns explicit and use the configured response schema.
   settings:
     timeout: 1200
     continue_on_failure: false
@@ -186,12 +185,10 @@ nodes:
       Original event:
       ${trigger}
 
-      Final handoff: return a self-contained JSON object matching the contract below.
-      Include all observations, exact values, source references, uncertainty, and
-      justification needed downstream in this final answer; later steps do not receive
-      your tool transcript. Use null/empty arrays for unknowns without inventing facts.
-      Response contract (also enforced as the response schema):
-      {"type":"object","additionalProperties":false,"properties":{"summary":{"type":"string"},"evidence":{"type":"array","items":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"tool":{"type":"string"},"source":{"type":"string"},"observation":{"type":"string"}},"required":["id","tool","source","observation"]}},"unanswered_questions":{"type":"array","items":{"type":"string"}}},"required":["summary","evidence","unanswered_questions"]}
+      Final handoff: Summarize the measured host state. Preserve uniquely identified observations,
+      actual diagnostic tools and sources, exact values, and unanswered questions.
+      Make this answer self-contained: later steps do not receive your tool transcript.
+      Keep unknowns explicit and use the configured response schema.
   settings:
     timeout: 1200
     continue_on_failure: false
@@ -263,12 +260,11 @@ nodes:
       Host evidence:
       ${investigate_host.result.content}
 
-      Final handoff: return a self-contained JSON object matching the contract below.
-      Include all observations, exact values, source references, uncertainty, and
-      justification needed downstream in this final answer; later steps do not receive
-      your tool transcript. Use null/empty arrays for unknowns without inventing facts.
-      Response contract (also enforced as the response schema):
-      {"type":"object","additionalProperties":false,"properties":{"summary":{"type":"string"},"evidence":{"type":"array","items":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"tool":{"type":"string"},"source":{"type":"string"},"observation":{"type":"string"}},"required":["id","tool","source","observation"]}},"unanswered_questions":{"type":"array","items":{"type":"string"}}},"required":["summary","evidence","unanswered_questions"]}
+      Final handoff: Summarize effective declared state and the reconciliation path. Preserve
+      source-attributed repository observations, paths/refs/blob SHAs, consuming
+      variables and roles, precedence, affected hosts, and unresolved questions.
+      Make this answer self-contained: later steps do not receive your tool transcript.
+      Keep unknowns explicit and use the configured response schema.
   settings:
     timeout: 1200
     continue_on_failure: false
@@ -433,12 +429,11 @@ nodes:
       Repository evidence:
       ${map_repository.result.content}
 
-      Final handoff: return a self-contained JSON object matching the contract below.
-      Include all observations, exact values, source references, uncertainty, and
-      justification needed downstream in this final answer; later steps do not receive
-      your tool transcript. Use null/empty arrays for unknowns without inventing facts.
-      Response contract (also enforced as the response schema):
-      {"type":"object","additionalProperties":false,"properties":{"decision":{"type":"string","enum":["ready","no_change","blocked"]},"conclusion_status":{"type":"string","enum":["confirmed","hypothesis","undetermined"]},"incident":{"type":"string"},"target_host":{"type":["string","null"]},"repository_context":{"type":"object","additionalProperties":false,"properties":{"owner":{"type":["string","null"]},"repository":{"type":["string","null"]},"base_branch":{"type":["string","null"]},"head_branch":{"type":["string","null"]},"read_commit":{"type":["string","null"]},"pull_request_number":{"type":["integer","null"]}},"required":["owner","repository","base_branch","head_branch","read_commit","pull_request_number"]},"root_cause":{"type":["string","null"]},"scope":{"type":["string","null"]},"reconciliation":{"type":["string","null"]},"recommendation":{"type":["string","null"]},"evidence":{"type":"array","items":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"tool":{"type":"string"},"source":{"type":"string"},"observation":{"type":"string"}},"required":["id","tool","source","observation"]}},"alternatives":{"type":"array","items":{"type":"string"}},"validation_plan":{"type":"array","items":{"type":"string"}},"limitations":{"type":"array","items":{"type":"string"}}},"required":["decision","conclusion_status","incident","target_host","repository_context","root_cause","scope","reconciliation","recommendation","evidence","alternatives","validation_plan","limitations"]}
+      Final handoff: Preserve the decision and its certainty, incident/host/repository context, causal
+      explanation, proposed scope and reconciliation path, recommendation, original
+      evidence with unique IDs, alternatives, future validation, and limitations.
+      Make this answer self-contained: later steps do not receive your tool transcript.
+      Keep unknowns explicit and use the configured response schema.
   settings:
     timeout: 1200
     continue_on_failure: false
@@ -509,12 +504,11 @@ nodes:
       Request:
       ${scope_request.result.content}
 
-      Final handoff: return a self-contained JSON object matching the contract below.
-      Include all observations, exact values, source references, uncertainty, and
-      justification needed downstream in this final answer; later steps do not receive
-      your tool transcript. Use null/empty arrays for unknowns without inventing facts.
-      Response contract (also enforced as the response schema):
-      {"type":"object","additionalProperties":false,"properties":{"summary":{"type":"string"},"blocking_findings":{"type":"array","items":{"type":"string"}},"follow_up":{"type":"array","items":{"type":"object","additionalProperties":false,"properties":{"question":{"type":"string"},"reason":{"type":"string"},"success_criterion":{"type":"string"}},"required":["question","reason","success_criterion"]},"maxItems":4}},"required":["summary","blocking_findings","follow_up"]}
+      Final handoff: Explain whether the diagnosis is supported. Preserve blocking findings and
+      up to four focused follow-up checks, each with its question, reason, and success
+      criterion; request no checks when the evidence is sufficient.
+      Make this answer self-contained: later steps do not receive your tool transcript.
+      Keep unknowns explicit and use the configured response schema.
   settings:
     timeout: 1200
     continue_on_failure: false
@@ -601,12 +595,11 @@ nodes:
       Request:
       ${scope_request.result.content}
 
-      Final handoff: return a self-contained JSON object matching the contract below.
-      Include all observations, exact values, source references, uncertainty, and
-      justification needed downstream in this final answer; later steps do not receive
-      your tool transcript. Use null/empty arrays for unknowns without inventing facts.
-      Response contract (also enforced as the response schema):
-      {"type":"object","additionalProperties":false,"properties":{"summary":{"type":"string"},"evidence":{"type":"array","items":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"tool":{"type":"string"},"source":{"type":"string"},"observation":{"type":"string"}},"required":["id","tool","source","observation"]}},"unanswered_questions":{"type":"array","items":{"type":"string"}}},"required":["summary","evidence","unanswered_questions"]}
+      Final handoff: Summarize the result of this specific check. Preserve uniquely identified
+      observations, exact values, actual tools and sources, failed checks,
+      contradictions, and unanswered questions.
+      Make this answer self-contained: later steps do not receive your tool transcript.
+      Keep unknowns explicit and use the configured response schema.
   settings:
     timeout: 1200
     continue_on_failure: false
@@ -781,12 +774,11 @@ nodes:
       Request:
       ${scope_request.result.content}
 
-      Final handoff: return a self-contained JSON object matching the contract below.
-      Include all observations, exact values, source references, uncertainty, and
-      justification needed downstream in this final answer; later steps do not receive
-      your tool transcript. Use null/empty arrays for unknowns without inventing facts.
-      Response contract (also enforced as the response schema):
-      {"type":"object","additionalProperties":false,"properties":{"decision":{"type":"string","enum":["ready","no_change","blocked"]},"conclusion_status":{"type":"string","enum":["confirmed","hypothesis","undetermined"]},"incident":{"type":"string"},"target_host":{"type":["string","null"]},"repository_context":{"type":"object","additionalProperties":false,"properties":{"owner":{"type":["string","null"]},"repository":{"type":["string","null"]},"base_branch":{"type":["string","null"]},"head_branch":{"type":["string","null"]},"read_commit":{"type":["string","null"]},"pull_request_number":{"type":["integer","null"]}},"required":["owner","repository","base_branch","head_branch","read_commit","pull_request_number"]},"root_cause":{"type":["string","null"]},"scope":{"type":["string","null"]},"reconciliation":{"type":["string","null"]},"recommendation":{"type":["string","null"]},"evidence":{"type":"array","items":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"tool":{"type":"string"},"source":{"type":"string"},"observation":{"type":"string"}},"required":["id","tool","source","observation"]}},"alternatives":{"type":"array","items":{"type":"string"}},"validation_plan":{"type":"array","items":{"type":"string"}},"limitations":{"type":"array","items":{"type":"string"}}},"required":["decision","conclusion_status","incident","target_host","repository_context","root_cause","scope","reconciliation","recommendation","evidence","alternatives","validation_plan","limitations"]}
+      Final handoff: Preserve the final decision and certainty, incident/host/repository context,
+      causal explanation, scope, reconciliation path, recommendation, all relevant
+      original and follow-up evidence, alternatives, pending validation, and limitations.
+      Make this answer self-contained: later steps do not receive your tool transcript.
+      Keep unknowns explicit and use the configured response schema.
   settings:
     timeout: 1200
     continue_on_failure: false
@@ -932,12 +924,11 @@ nodes:
       Original event:
       ${trigger}
 
-      Final handoff: return a self-contained JSON object matching the contract below.
-      Include all observations, exact values, source references, uncertainty, and
-      justification needed downstream in this final answer; later steps do not receive
-      your tool transcript. Use null/empty arrays for unknowns without inventing facts.
-      Response contract (also enforced as the response schema):
-      {"type":"object","additionalProperties":false,"properties":{"operation":{"type":"string","enum":["create_pr","update_pr"]},"owner":{"type":"string"},"repository":{"type":"string"},"base_branch":{"type":"string"},"branch":{"type":"string"},"read_commit":{"type":"string"},"pull_request_number":{"type":["integer","null"]},"pr_title":{"type":"string"},"commit_message":{"type":"string"},"files":{"type":"array","items":{"type":"object","additionalProperties":false,"properties":{"path":{"type":"string"},"expected_sha":{"type":["string","null"]},"content":{"type":"string"},"reason":{"type":"string"},"evidence_ids":{"type":"array","items":{"type":"string"},"minItems":1},"setting_changes":{"type":"array","items":{"type":"object","additionalProperties":false,"properties":{"path":{"type":"array","items":{"type":"string"},"minItems":1},"before":{},"after":{}},"required":["path","before","after"]},"minItems":1}},"required":["path","expected_sha","content","reason","evidence_ids","setting_changes"]},"minItems":1,"maxItems":4}},"required":["operation","owner","repository","base_branch","branch","read_commit","pull_request_number","pr_title","commit_message","files"]}
+      Final handoff: Preserve the operation, repository/PR identity, branches and inspected commit,
+      PR title and commit message, complete updated files and original blob SHAs,
+      per-file justification and evidence IDs, and every exact before/after leaf change.
+      Make this answer self-contained: later steps do not receive your tool transcript.
+      Keep unknowns explicit and use the configured response schema.
   settings:
     timeout: 1200
     continue_on_failure: false
@@ -1004,12 +995,11 @@ nodes:
       Request:
       ${scope_request.result.content}
 
-      Final handoff: return a self-contained JSON object matching the contract below.
-      Include all observations, exact values, source references, uncertainty, and
-      justification needed downstream in this final answer; later steps do not receive
-      your tool transcript. Use null/empty arrays for unknowns without inventing facts.
-      Response contract (also enforced as the response schema):
-      {"type":"object","additionalProperties":false,"properties":{"approved":{"type":"boolean"},"summary":{"type":"string"},"blocking_findings":{"type":"array","items":{"type":"string"}},"reviewed_paths":{"type":"array","items":{"type":"string"}}},"required":["approved","summary","blocking_findings","reviewed_paths"]}
+      Final handoff: State whether the exact plan is approved and explain why. Preserve all
+      blocking findings and the complete list of reviewed paths; approval requires
+      no unresolved blockers.
+      Make this answer self-contained: later steps do not receive your tool transcript.
+      Keep unknowns explicit and use the configured response schema.
   settings:
     timeout: 1200
     continue_on_failure: false
@@ -1108,12 +1098,9 @@ nodes:
       Final assessment:
       ${final_assessment.result.content}
 
-      Final handoff: return a self-contained JSON object matching the contract below.
-      Include all observations, exact values, source references, uncertainty, and
-      justification needed downstream in this final answer; later steps do not receive
-      your tool transcript. Use null/empty arrays for unknowns without inventing facts.
-      Response contract (also enforced as the response schema):
-      {"type":"object","additionalProperties":false,"properties":{"outcome":{"type":"string","enum":["no_change","blocked","rejected"]},"summary":{"type":"string"},"evidence":{"type":"array","items":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"tool":{"type":"string"},"source":{"type":"string"},"observation":{"type":"string"}},"required":["id","tool","source","observation"]}},"next_steps":{"type":"array","items":{"type":"string"}}},"required":["outcome","summary","evidence","next_steps"]}
+      Final handoff: State the no-write outcome and its explanation. Retain the supporting evidence
+      and concrete next steps, including missing evidence or corrections required.
+      Use the configured response schema.
   settings:
     timeout: 1200
     continue_on_failure: false
@@ -1184,12 +1171,9 @@ nodes:
       Final assessment:
       ${final_assessment.result.content}
 
-      Final handoff: return a self-contained JSON object matching the contract below.
-      Include all observations, exact values, source references, uncertainty, and
-      justification needed downstream in this final answer; later steps do not receive
-      your tool transcript. Use null/empty arrays for unknowns without inventing facts.
-      Response contract (also enforced as the response schema):
-      {"type":"object","additionalProperties":false,"properties":{"outcome":{"type":"string","enum":["no_change","blocked","rejected"]},"summary":{"type":"string"},"evidence":{"type":"array","items":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"tool":{"type":"string"},"source":{"type":"string"},"observation":{"type":"string"}},"required":["id","tool","source","observation"]}},"next_steps":{"type":"array","items":{"type":"string"}}},"required":["outcome","summary","evidence","next_steps"]}
+      Final handoff: State the no-write outcome and its explanation. Retain the supporting evidence
+      and concrete next steps, including missing evidence or corrections required.
+      Use the configured response schema.
   settings:
     timeout: 1200
     continue_on_failure: false
@@ -1261,12 +1245,9 @@ nodes:
       Assessment:
       ${final_assessment.result.content}
 
-      Final handoff: return a self-contained JSON object matching the contract below.
-      Include all observations, exact values, source references, uncertainty, and
-      justification needed downstream in this final answer; later steps do not receive
-      your tool transcript. Use null/empty arrays for unknowns without inventing facts.
-      Response contract (also enforced as the response schema):
-      {"type":"object","additionalProperties":false,"properties":{"outcome":{"type":"string","enum":["no_change","blocked","rejected"]},"summary":{"type":"string"},"evidence":{"type":"array","items":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"tool":{"type":"string"},"source":{"type":"string"},"observation":{"type":"string"}},"required":["id","tool","source","observation"]}},"next_steps":{"type":"array","items":{"type":"string"}}},"required":["outcome","summary","evidence","next_steps"]}
+      Final handoff: State the no-write outcome and its explanation. Retain the supporting evidence
+      and concrete next steps, including missing evidence or corrections required.
+      Use the configured response schema.
   settings:
     timeout: 1200
     continue_on_failure: false
@@ -1336,12 +1317,9 @@ nodes:
       Analysis:
       ${analyze_case.result.content}
 
-      Final handoff: return a self-contained JSON object matching the contract below.
-      Include all observations, exact values, source references, uncertainty, and
-      justification needed downstream in this final answer; later steps do not receive
-      your tool transcript. Use null/empty arrays for unknowns without inventing facts.
-      Response contract (also enforced as the response schema):
-      {"type":"object","additionalProperties":false,"properties":{"outcome":{"type":"string","enum":["no_change","blocked","rejected"]},"summary":{"type":"string"},"evidence":{"type":"array","items":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"tool":{"type":"string"},"source":{"type":"string"},"observation":{"type":"string"}},"required":["id","tool","source","observation"]}},"next_steps":{"type":"array","items":{"type":"string"}}},"required":["outcome","summary","evidence","next_steps"]}
+      Final handoff: State the no-write outcome and its explanation. Retain the supporting evidence
+      and concrete next steps, including missing evidence or corrections required.
+      Use the configured response schema.
   settings:
     timeout: 1200
     continue_on_failure: false

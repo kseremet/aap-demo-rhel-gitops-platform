@@ -55,8 +55,9 @@ a condition rejects more than four checks before the loop starts, and the curren
 AO engine checks its limit before the final completion turn. The AAP publication node has automatic retries disabled because a
 blind retry after publication could create a second proposal.
 
-Every agent has an explicit response schema. Its prompt also contains the same
-contract and requires a self-contained final evidence packet. This is deliberate:
+Every agent has an explicit response schema, which is the authoritative output
+structure. Prompts describe concise, role-specific handoff requirements rather
+than duplicating the JSON schema. They require a self-contained evidence packet:
 the checked-out AO runtime converts the agent's final answer into structured JSON
 in a separate call, without the full tool transcript. A schema alone cannot recover
 observations that the investigative answer omitted. The harness changes no AO
