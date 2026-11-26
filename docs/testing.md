@@ -37,6 +37,27 @@ Tracks testing progress for this demo. For procedural verification steps, see [s
 
 ## Latest local validation
 
+- 2026-11-26: The maintainer confirmed combined CasC completed successfully.
+  Incident invocation `4065cd0e-697a-48db-84a7-f59af4bcea44` then failed during
+  checkpoint serialization. Pod logs confirmed actual GitHub tool calls.
+  Reproduced the exact TypeError with an embedded MCP text resource's `AnyUrl`
+  artifact and confirmed the old adapter also hides the file body from the model.
+  Plain/error ToolMessages and the installed tool-error handler serialized
+  successfully in isolated checks. Prepared an AO provider source patch; nine
+  offline checks passed against the exact container dependencies, including
+  visible resource text, streaming events, checkpoint round-trip, binary
+  preservation, and error propagation. Patch application/compilation checks
+  passed in a disposable source copy. No installed application files or running
+  services were modified; AO image rollout is pending a separate decision.
+- Corrected the AAP evidence validator to accept the installed GitHub MCP's `sha`
+  revision argument as well as `ref`, with exact-commit and conflicting-alias
+  rejection. Seven new regression cases cover the argument variants. All 111
+  platform regression tests passed. Nine separate AO compatibility checks passed
+  in memory using the installed MCP adapter factory and a fake MCP session,
+  including JSON metadata aliases. The maintainer selected source-patch handoff;
+  no AO rollout will be performed by this session. Full live incident/PR and
+  maintainer-feedback runs remain pending the AO maintainer's runtime fix.
+
 - 2026-11-26: Fixed AAP template creation failing with "Playbook not found for
   project." The platform Project was still synced to an October 19 revision,
   before the evidence-validator playbook existed. Added `update_project: true`
@@ -146,6 +167,8 @@ Tracks testing progress for this demo. For procedural verification steps, see [s
 - Make the updated writer available to the AAP platform project and apply both workflow and JT configuration through `playbooks/casc.yml` together. Uncommitted local code is not available to a remote AAP SCM sync.
 - Live-test both workflows with the configured model: verify actual host/tool targeting, policy evidence, precedence/scope, reviewer-requested checks, no-change/blocked/rejected outcomes, complete reporting, and non-recursive feedback handling. See [ao-harness.md](ao-harness.md). Local checks do not establish runtime success.
 
-- If AO reproduces `Type is not msgpack serializable: ToolMessage`, capture the
-  failed invocation and AO worker traceback for a platform runtime fix. The demo
-  cannot treat this failure as evidence or a justified no-change result.
+- The AO runtime currently fails on embedded MCP file resources and omits their
+  actual text from model input. The tested fix is prepared under
+  `patches/automation-orchestrator/` but requires an AO backend image rollout;
+  workflow imports alone cannot repair it. Keep workflow status Partial until
+  that rollout and full incident/PR feedback tests are confirmed.

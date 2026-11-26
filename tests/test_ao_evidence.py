@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from test_ao_gitops_writer import REPO, handoff, runtime_evidence
+from test_ao_gitops_writer import COMMIT, REPO, handoff, runtime_evidence
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location(
@@ -201,3 +201,26 @@ def test_structured_result_fields_are_compared_without_fuzzy_matching(claim, val
     assert (
         MODULE.matches_output(claim, '{"hostname":"web-01-gitops","count":1}') is valid
     )
+
+
+@pytest.mark.parametrize(
+    "refs,valid",
+    [
+        ({"sha": COMMIT}, True),
+        ({"ref": COMMIT}, True),
+        ({"sha": COMMIT, "ref": COMMIT}, True),
+        ({"sha": COMMIT, "ref": "main"}, False),
+        ({"sha": "main", "ref": COMMIT}, False),
+        ({"sha": "main"}, False),
+        ({}, False),
+    ],
+)
+def test_pinned_file_read_supports_actual_mcp_revision_parameter_names(
+    handoff, refs, valid
+):
+    report = handoff[1]
+    packet = runtime_evidence(report)
+    args = packet["file"]["result"]["agent_trace"]["steps"][0]["tool_input"]
+    args.pop("ref")
+    args.update(refs)
+    assert verdict(report, packet)["valid"] is valid

@@ -174,7 +174,10 @@ def validate_evidence(report, packet, review, repository_url):
     pinned_reads = [
         r
         for r in repo_records
-        if r["tool"] == "get_file_contents" and r["input"].get("ref") == commit
+        if r["tool"] == "get_file_contents"
+        and any(r["input"].get(key) == commit for key in ("ref", "sha"))
+        # Reject conflicting aliases, even if one happens to contain the SHA.
+        and all(r["input"].get(key) in (None, "", commit) for key in ("ref", "sha"))
     ]
     if not pinned_reads:
         blockers.append(

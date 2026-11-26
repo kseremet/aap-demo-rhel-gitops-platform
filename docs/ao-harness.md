@@ -284,12 +284,26 @@ schemas. GitHub `get_commit` returned the actual repository commit. The earlier
 incident had made zero tool calls and repeated fabricated host/policy claims.
 The harness now makes calls mandatory and rejects unsupported outcomes.
 
-Live diagnostics also found stale Linux MCP SSH aliases after VM address changes;
-Linux MCP authorized the calls but SSH timed out against the old addresses.
+Live diagnostics also found Linux MCP SSH aliases that differed from the current
+VMI addresses; the observations did not establish when VM addresses changed.
+Linux MCP authorized the calls but SSH timed out against those stale aliases.
 The aliases were refreshed from live VMIs, and the same repair is now part of CasC.
 A subsequent AO call identified `web-01-gitops`, and the updated bounded host
 prompt measured the actual somaxconn value `65535` through Linux MCP.
-A separate isolated workflow-node test exposed an AO/LangGraph error:
-`Type is not msgpack serializable: ToolMessage`. Keep this as an AO runtime issue
-if it recurs; do not treat failed tool handling as a measured incident result.
-The platform demo does not patch AO's installed Python packages or global prompt.
+A subsequent incident invocation reproduced
+`Type is not msgpack serializable: ToolMessage`. The actual cause is an embedded
+MCP file resource: the adapter leaves its typed `AnyUrl` URI in the tool artifact,
+which breaks checkpoint serialization, and hides its file body from model-visible
+content. A missing-file tool error occurred in the same run but is not the root
+cause; ordinary error ToolMessages serialize correctly.
+
+The tested AO source fix and exact runtime versions are documented in
+[the compatibility patch notes](../patches/automation-orchestrator/README.md).
+The patch normalizes MCP results before tool messages are emitted, preserving
+file text in model history and traces and keeping artifacts JSON-safe. It requires
+an AO backend image rollout and is not applied by `playbooks/casc.yml`.
+The demo does not modify installed AO packages or its global system prompt.
+
+The evidence validator accepts pinned file reads expressed through either GitHub
+MCP argument name, `sha` or `ref`. Both require the exact inspected commit; a
+moving branch or conflicting aliases are rejected.
