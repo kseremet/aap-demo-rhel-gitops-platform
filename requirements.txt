@@ -1,4 +1,6 @@
-# Python SDKs used by kubernetes.core and kubevirt.core for local execution.
+# Runtime dependencies for local AAP CasC and Kubernetes/VM provisioning.
 ansible-core>=2.18,<2.20
+# ansible.platform's controller-side manager imports requests directly.
+requests>=2.31,<3
 kubernetes>=28.1.0
 openshift>=0.13.2
