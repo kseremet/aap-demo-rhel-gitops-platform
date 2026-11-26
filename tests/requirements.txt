@@ -1,0 +1,6 @@
+# Offline writer and workflow-contract regression checks; no live AO/GitHub calls.
+ansible-core>=2.18,<2.20
+pytest>=8,<10
+jsonschema>=4.22,<5
+referencing>=0.35
+PyYAML>=6

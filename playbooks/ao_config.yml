@@ -12,6 +12,9 @@
     - ../group_vars/all/demo_variables.yml
   vars:
     ao_api_base_url: "{{ demo_ao_url | regex_replace('/+$', '') }}/api/v1"
+    # AO currently uses Chat Completions. Keep its tool-compatible model
+    # independent of the CrewAI model, which can use a different API client.
+    ao_llm_model_name: "{{ demo_ao_llm_model | default('gpt-4.1') }}"
     ao_workflow_definitions:
       - name: rhel-gitops-incident-investigation
         path: "{{ playbook_dir }}/../workflows/automation-orchestrator/rhel-gitops-incident.yaml"

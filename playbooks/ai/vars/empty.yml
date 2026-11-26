@@ -1,0 +1,3 @@
+---
+# Fallback when local-only settings are absent from the AAP SCM checkout.
+{}

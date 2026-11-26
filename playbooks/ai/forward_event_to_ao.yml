@@ -7,8 +7,10 @@
   connection: local
   gather_facts: false
   vars_files:
-    - ../../vault.yml
-    - ../../group_vars/all/demo_variables.yml
+    # AAP supplies credentials and configuration through the job template.
+    # Keep local vars_files support without requiring ignored files in SCM.
+    - [../../vault.yml, vars/empty.yml]
+    - [../../group_vars/all/demo_variables.yml, vars/empty.yml]
   tasks:
     - name: Validate Automation Orchestrator bridge inputs
       ansible.builtin.assert:

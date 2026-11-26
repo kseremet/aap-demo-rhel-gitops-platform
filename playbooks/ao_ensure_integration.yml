@@ -212,14 +212,28 @@
   when: ao_integration.integration_type == 'ansible_automation_platform'
   changed_when: false
 
+# Do not silently fall back to the provider's default model: that can restore
+# the reasoning/tool API incompatibility this workflow's model selection avoids.
+- name: Require the configured AO model in the discovered model catalog
+  ansible.builtin.assert:
+    that:
+      - >-
+        (_ao_models.json.resources | selectattr('name', 'equalto', ao_llm_model_name) | list | length) == 1
+    fail_msg: >-
+      AO model {{ ao_llm_model_name }} was not uniquely discovered. Check the
+      LLM integration model catalog and demo_ao_llm_model before importing workflows.
+  when: ao_integration.integration_type == 'llm_provider'
+  tags:
+    - ao
+    - validation
+
 - name: Store project LLM integration and credential IDs
   ansible.builtin.set_fact:
     ao_llm_integration_id: "{{ ao_integration_id }}"
     ao_llm_credential_id: "{{ ao_integration_credential_id }}"
     ao_llm_model_id: >-
       {{ (_ao_models.json.resources
-          | selectattr('name', 'equalto', demo_ai_llm_model) | list | first
-          | default(_ao_models.json.resources | selectattr('is_default', 'equalto', true) | list | first)).id }}
+          | selectattr('name', 'equalto', ao_llm_model_name) | list | first).id }}
   when: ao_integration.integration_type == 'llm_provider'
   changed_when: false
 

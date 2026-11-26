@@ -1,61 +1,22 @@
 ---
-- name: Validate the planned GitOps repository path
-  ansible.builtin.assert:
-    that:
-      - _ao_file.path is string
-      - not _ao_file.path.startswith('/')
-      - "'..' not in _ao_file.path.split('/')"
-    fail_msg: >-
-      GitOps plan paths must be repository-relative and cannot contain '..':
-      {{ _ao_file.path | default('missing path') }}
-  no_log: false
-
-- name: Read the current GitOps file from the working branch
+# Preflight only: pinned reads and semantic validation, with no GitHub writes.
+# The caller publishes all validated entries together in one Git tree/commit.
+- name: Read the complete variable file at the inspected commit
   ansible.builtin.uri:
     url: >-
-      {{ github_api_base_url }}/repos/{{ _ao_plan.owner }}/{{ _ao_plan.repository
-      }}/contents/{{ _ao_file.path }}?ref={{ _ao_plan.branch }}
+      {{ github_api_base_url }}/repos/{{ _ao_plan.owner }}/{{ _ao_plan.repository }}/contents/{{
+         _ao_file.path }}?ref={{ _ao_plan.read_commit }}
     method: GET
-    headers:
-      Accept: application/vnd.github+json
-      Authorization: "Bearer {{ github_api_token }}"
-      X-GitHub-Api-Version: "2022-11-28"
-    status_code: [200, 404]
+    headers: "{{ _ao_headers }}"
     return_content: true
+    status_code: [200, 404]
   register: _github_current_file
-  no_log: false
+  no_log: true
+  tags: [ao, github, validation]
 
-- name: Write the planned GitOps file
-  ansible.builtin.uri:
-    url: "{{ github_api_base_url }}/repos/{{ _ao_plan.owner }}/{{ _ao_plan.repository }}/contents/{{ _ao_file.path }}"
-    method: PUT
-    headers:
-      Accept: application/vnd.github+json
-      Authorization: "Bearer {{ github_api_token }}"
-      X-GitHub-Api-Version: "2022-11-28"
-    body_format: json
-    body:
-      message: "{{ _ao_plan.commit_message | default(_ao_plan.pr_title) }}"
-      content: "{{ _ao_file.content | b64encode }}"
-      branch: "{{ _ao_plan.branch }}"
-      sha: "{{ _github_current_file.json.sha }}"
-    status_code: 200
-  when: _github_current_file.status == 200
-  no_log: false
-
-- name: Create the planned GitOps file
-  ansible.builtin.uri:
-    url: "{{ github_api_base_url }}/repos/{{ _ao_plan.owner }}/{{ _ao_plan.repository }}/contents/{{ _ao_file.path }}"
-    method: PUT
-    headers:
-      Accept: application/vnd.github+json
-      Authorization: "Bearer {{ github_api_token }}"
-      X-GitHub-Api-Version: "2022-11-28"
-    body_format: json
-    body:
-      message: "{{ _ao_plan.commit_message | default(_ao_plan.pr_title) }}"
-      content: "{{ _ao_file.content | b64encode }}"
-      branch: "{{ _ao_plan.branch }}"
-    status_code: 201
-  when: _github_current_file.status == 404
-  no_log: false
+- name: Validate the exact setting changes and preserve unrelated configuration
+  ansible.builtin.set_fact:
+    _ao_tree: >-
+      {{ _ao_tree + [_ao_file | ao_validate_file(_github_current_file,
+         _ao_variable_loader | ao_consumed_variables)] }}
+  tags: [ao, github, validation]

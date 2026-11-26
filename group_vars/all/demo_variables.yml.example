@@ -48,6 +48,9 @@ demo_ao_pr_review_eda_trigger_path: rhel-gitops-pr-review
 demo_ao_project_name: rhel-gitops-agentic-workflows
 demo_ao_aap_integration_name: RHEL GitOps AAP
 demo_ao_llm_integration_name: RHEL GitOps LLM
+# AO's Chat Completions model is independent of the CrewAI model above.
+# GPT-4.1 is a temporary compatibility choice; retirement is January 14, 2027.
+demo_ao_llm_model: gpt-4.1
 demo_ao_mcp_integration_name: RHEL GitOps Linux MCP
 demo_ao_mcp_url: http://linux-mcp-server:8000/mcp
 demo_ao_github_mcp_integration_name: RHEL GitOps GitHub MCP

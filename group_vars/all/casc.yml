@@ -162,8 +162,10 @@ controller_templates:
     inventory: "{{ demo_ai_inventory_name }}"
     project: "{{ demo_platform_project_name }}"
     playbook: playbooks/ai/forward_event_to_ao.yml
+    ask_variables_on_launch: true
     extra_vars:
       ao_webhook_base_url: "{{ demo_ao_url }}"
+      aap_validate_certs: "{{ aap_validate_certs }}"
     credentials:
       - Automation Orchestrator Service Account
   - name: JT - AO GitOps Action
@@ -174,6 +176,11 @@ controller_templates:
     project: "{{ demo_platform_project_name }}"
     playbook: playbooks/ai/run_ao_gitops_action.yml
     ask_variables_on_launch: true
+    # Resolve ignored local settings now; the writer also uses vars_files locally.
+    extra_vars:
+      demo_state_scm_url: "{{ demo_state_scm_url }}"
+      demo_ai_github_api_url: "{{ demo_ai_github_api_url }}"
+      demo_ai_pr_branch_prefix: "{{ demo_ai_pr_branch_prefix }}"
     credentials:
       - GitHub API Access
 

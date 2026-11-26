@@ -1,4 +1,4 @@
-![Status](https://img.shields.io/badge/Status-Ready-green)
+![Status](https://img.shields.io/badge/Status-WIP-yellow)
 ![Red Hat AAP](https://img.shields.io/badge/AAP-2.6%2B-red)
 ![OpenShift Virtualization](https://img.shields.io/badge/OpenShift%20Virtualization-KubeVirt-blue)
 ![CasC](https://img.shields.io/badge/CasC-infra.aap__configuration-blue)
@@ -230,6 +230,35 @@ Automation Orchestrator EDA trigger. Run `playbooks/ao_config.yml` with the AO
 URL and local admin password to create the demo AO project and import the
 version-controlled workflows.
 
-Set `demo_ai_llm_provider`, `demo_ai_llm_model`, and `demo_ai_llm_base_url` in
-`group_vars/all/demo_variables.yml`. Set `vault_ai_llm_api_key` in `vault.yml`
-and encrypt that file before use.
+For AO plans with `operation: create_pr`, `JT - AO GitOps Action` appends a
+random suffix to the proposed branch name and creates it from the base branch.
+Each job run can therefore open a separate PR even when the planner repeats
+`aiops/incident-remediation`. Plans with `operation: update_pr` retain the
+existing PR branch so maintainer feedback updates that PR.
+
+AO workflows now separate request scoping, host evidence, repository mapping,
+causal analysis, evidence review, and edit review. A bounded loop collects up to
+four reviewer-requested observations before the final assessment. Switches route
+no-change and blocked cases to reports; only independently approved plans reach
+AAP. Each agent returns a self-contained structured evidence packet.
+
+The AAP writer pins the inspected revision, preflights every variable file, and
+checks exact YAML setting changes before publishing all edits as one commit.
+It renders the full incident report, evidence, scope, alternatives, limitations,
+and pending validation into the PR. PR revisions refresh the body and add an
+EDA-marked summary comment. See [AO investigation harness](docs/ao-harness.md)
+for the flow, supported edit contract, offline checks, and live-test procedure.
+
+Set `demo_ai_llm_provider` and `demo_ai_llm_base_url` in
+`group_vars/all/demo_variables.yml`. `demo_ai_llm_model` selects the CrewAI
+model; `demo_ao_llm_model` independently selects the model for both AO workflows.
+AO defaults to `gpt-4.1` for Chat Completions with tool calling. CasC requires
+that exact model in the integration's discovered catalog and does not fall back
+to a provider default. This is a temporary compatibility choice: OpenAI lists
+[GPT-4.1 retirement on January 14, 2027](https://developers.openai.com/api/docs/deprecations).
+Use a newer model after validating AO's API/tool compatibility. Set
+`vault_ai_llm_api_key` in `vault.yml` and encrypt that file before use.
+
+Apply these AO and AAP changes together with `playbooks/casc.yml`, which imports
+the workflows and resolves the configured model before configuring AAP. Static
+validation does not update the deployed workflows or model selection.
