@@ -1,0 +1,124 @@
+---
+# Read-only foundation shared by all incident families. Fetch every required
+# declaration at one immutable revision, then measure the one inventory target.
+- name: Collect the pinned repository context # noqa: fqcn[keyword] - explicit collection policy
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  collections: [ansible.builtin]
+  tags: [ao, evidence]
+  tasks:
+    - name: Resolve repository identity and the original feedback PR
+      ansible.builtin.set_fact:
+        _request: "{{ ao_request | ao_request_context(demo_state_scm_url, ao_mode | default('incident'), groups['all']) }}"
+      no_log: true
+
+    - name: Read the existing PR for feedback without following another repository
+      ansible.builtin.uri:
+        url: >-
+          https://api.github.com/repos/{{ _request.repository_context.owner }}/{{ _request.repository_context.repository
+          }}/pulls/{{ _request.repository_context.pull_request_number }}
+        headers:
+          Authorization: "Bearer {{ github_api_token }}"
+          Accept: application/vnd.github+json
+        return_content: true
+        status_code: 200
+        follow_redirects: none
+      register: _pr
+      when: ao_mode | default('incident') == 'pr_review'
+      no_log: true
+
+    - name: Retain the original PR identity and resolve the inventory target
+      ansible.builtin.set_fact:
+        _request: >-
+          {{ ao_request | ao_request_context(demo_state_scm_url, ao_mode | default('incident'),
+             groups['all'], _pr.json | default(None)) }}
+      no_log: true
+
+    - name: Require one unambiguous managed host
+      ansible.builtin.assert:
+        that:
+          - _request.target_host is string and _request.target_host | length > 0
+          - "'ao_evidence_target' not in groups"
+        fail_msg: Supply target_host in the event; it must identify one managed inventory host.
+
+    - name: Pin the base or existing PR head revision
+      ansible.builtin.uri:
+        url: >-
+          https://api.github.com/repos/{{ _request.repository_context.owner }}/{{ _request.repository_context.repository }}/commits/{{
+          _request.repository_context.read_commit | default(_request.repository_context.base_branch, true) | urlencode }}
+        headers:
+          Authorization: "Bearer {{ github_api_token }}"
+          Accept: application/vnd.github+json
+        return_content: true
+        status_code: 200
+        follow_redirects: none
+      register: _commit
+      no_log: true
+
+    - name: Read the complete tree at the inspected commit
+      ansible.builtin.uri:
+        url: >-
+          https://api.github.com/repos/{{ _request.repository_context.owner }}/{{ _request.repository_context.repository
+          }}/git/trees/{{ _commit.json.commit.tree.sha }}?recursive=1
+        headers:
+          Authorization: "Bearer {{ github_api_token }}"
+          Accept: application/vnd.github+json
+        return_content: true
+        status_code: 200
+        follow_redirects: none
+      register: _tree
+      no_log: true
+
+    # Read baselines, all group declarations, target overlays, loaders and entry
+    # tasks before agent reasoning. Missing budget is not proof of absent policy.
+    - name: Read and pin each required repository file
+      ansible.builtin.uri:
+        url: "https://api.github.com/repos/{{ _request.repository_context.owner }}/{{ _request.repository_context.repository }}/git/blobs/{{ item.sha }}"
+        headers:
+          Authorization: "Bearer {{ github_api_token }}"
+          Accept: application/vnd.github+json
+        return_content: true
+        status_code: 200
+        follow_redirects: none
+      loop: "{{ _tree.json | ao_collection_paths(_request.target_host) }}"
+      loop_control:
+        label: "{{ item.path }}"
+      register: _files
+      no_log: true
+
+    - name: Verify complete contents and build the immutable repository snapshot
+      ansible.builtin.set_fact:
+        _snapshot: "{{ _request | ao_repository_snapshot(_commit.json, _tree.json, _files.results) }}"
+      no_log: true
+
+    # Add only the already-validated inventory host to an in-memory play group.
+    # A concrete group also permits syntax checks before the first play runs.
+    - name: Select only the resolved host for the measurement play
+      ansible.builtin.add_host:
+        name: "{{ _request.target_host }}"
+        groups: ao_evidence_target
+      changed_when: false
+
+- name: Measure the inventory target without changing configuration # noqa: fqcn[keyword] - explicit collection policy
+  hosts: ao_evidence_target
+  become: true
+  gather_facts: false
+  collections: [ansible.builtin]
+  tags: [ao, evidence]
+  tasks:
+    - name: Collect read-only identity, filesystem, device and LVM facts
+      ansible.builtin.setup:
+        gather_subset: ['!all', min, hardware, network]
+      register: _facts
+      changed_when: false
+      no_log: true
+
+    - name: Return only selected measurements and the verified source packet
+      ansible.builtin.set_stats:
+        data:
+          ao_collection: >-
+            {{ hostvars['localhost']._snapshot | ao_finish_collection(
+               _facts.ansible_facts, group_names, awx_job_id | default('local-read-only-collection')) }}
+        per_host: false
+      no_log: true

@@ -18,5 +18,5 @@
   ansible.builtin.set_fact:
     _ao_tree: >-
       {{ _ao_tree + [_ao_file | ao_validate_file(_github_current_file,
-         _ao_variable_loader | ao_consumed_variables)] }}
+         _ao_variable_loader | ao_consumed_variables, _ao_report, ao_evidence | default({}))] }}
   tags: [ao, github, validation]

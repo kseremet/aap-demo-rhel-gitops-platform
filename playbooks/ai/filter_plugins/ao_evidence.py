@@ -30,7 +30,11 @@ LINUX_TOOLS = {
     "get_memory_information",
     "get_cpu_information",
     "get_hardware_information",
+    "list_block_devices",
+    "ansible_setup",
 }
+REPO_READ_TOOLS = {"get_file_contents", "github_api_get_file"}
+COMMIT_TOOLS = {"get_commit", "github_api_get_commit"}
 
 
 def successful_results(packet):
@@ -218,6 +222,58 @@ def request_policy_requirements(request):
     return requirements
 
 
+def validate_capacity(report, host_records):
+    """Require measured LV/VG/mount mapping and conservative backing headroom."""
+    from decimal import Decimal
+
+    capacity = report.get("capacity_assessment") or {}
+    if not isinstance(capacity, dict):
+        return "Capacity proposal requires measured LV/VG/filesystem facts."
+    for record in host_records:
+        if record["tool"] != "ansible_setup":
+            continue
+        try:
+            facts = json.loads(record["output"])
+            vg, lv = capacity["volume_group"], capacity["logical_volume"]
+            lvm = facts["lvm"]
+            volume = lvm["lvs"][lv]
+            if volume["vg"] != vg:
+                continue
+            mounts = [
+                m for m in facts["mounts"] if m.get("mount") == capacity["mount_point"]
+            ]
+            if not mounts:
+                continue
+            # Decode device-mapper's doubled hyphens without assuming LV names.
+            device = mounts[0].get("device", "")
+            if device not in (
+                f"/dev/{vg}/{lv}",
+                "/dev/mapper/" + vg.replace("-", "--") + "-" + lv.replace("-", "--"),
+            ):
+                continue
+            current = Decimal(volume["size_g"])
+            free = Decimal(lvm["vgs"][vg]["free_g"])
+            proposed = int(capacity["proposed_size_bytes"])
+            if isinstance(capacity["proposed_size_bytes"], bool):
+                continue
+            if proposed < int(current * 1024**3):
+                return "Storage shrink is not a supported automatic proposal."
+            # setup reports decimal GiB rounded to 2 places. Keep a rounding
+            # reserve instead of claiming all reported bytes are allocatable.
+            growth = max(
+                0, proposed - int(max(Decimal(0), current - Decimal("0.01")) * 1024**3)
+            )
+            available = int(max(Decimal(0), free - Decimal("0.01")) * 1024**3)
+            if growth > available:
+                return "Proposed LV growth exceeds verified backing VG capacity (including rounding reserve)."
+            if not str(mounts[0].get("fstype", "")):
+                return "Filesystem type was not measured."
+            return None
+        except (KeyError, ValueError, TypeError, ArithmeticError):
+            continue
+    return "Capacity proposal lacks verified LV/VG identity, mount mapping, filesystem type or free-capacity facts."
+
+
 def validate_evidence(report, packet, review, repository_url):
     """Return an explicit blocked result for malformed or unproven assessments."""
     blockers = []
@@ -250,7 +306,7 @@ def validate_evidence(report, packet, review, repository_url):
         if r["input"].get("owner") == owner and r["input"].get("repo") == repo
     ]
     if not any(
-        r["tool"] == "get_commit" and isinstance(commit, str) and commit in r["output"]
+        r["tool"] in COMMIT_TOOLS and isinstance(commit, str) and commit in r["output"]
         for r in repo_records
     ):
         blockers.append(
@@ -259,7 +315,7 @@ def validate_evidence(report, packet, review, repository_url):
     pinned_reads = [
         r
         for r in repo_records
-        if r["tool"] == "get_file_contents"
+        if r["tool"] in REPO_READ_TOOLS
         and any(r["input"].get(key) == commit for key in ("ref", "sha"))
         # Reject conflicting aliases, even if one happens to contain the SHA.
         and all(r["input"].get(key) in (None, "", commit) for key in ("ref", "sha"))
@@ -276,7 +332,9 @@ def validate_evidence(report, packet, review, repository_url):
         and host not in ["", "localhost", "127.0.0.1"]
         and r["input"].get("host") == host
     ]
-    if not any(r["tool"] == "get_system_information" for r in host_records):
+    if not any(
+        r["tool"] in {"get_system_information", "ansible_setup"} for r in host_records
+    ):
         blockers.append("No successful target-host identity measurement was returned.")
     evidence = report.get("evidence")
     evidence = evidence if isinstance(evidence, list) else []
@@ -306,17 +364,20 @@ def validate_evidence(report, packet, review, repository_url):
                 or (
                     r in repo_records
                     and r["tool"]
-                    in {
-                        "get_commit",
-                        "pull_request_read",
-                        "list_commits",
-                        "search_code",
-                    }
+                    in (
+                        COMMIT_TOOLS
+                        | {
+                            "get_commit",
+                            "pull_request_read",
+                            "list_commits",
+                            "search_code",
+                        }
+                    )
                 )
             )
             and matches_output(excerpt, r["output"])
             and (
-                r["tool"] not in {"read_file", "get_file_contents"}
+                r["tool"] not in ({"read_file"} | REPO_READ_TOOLS)
                 or (
                     isinstance(r["input"].get("path"), str)
                     and bool(r["input"]["path"])
@@ -382,7 +443,89 @@ def validate_evidence(report, packet, review, repository_url):
     # Desired policy must have an authority separate from the observed runtime
     # or an inactive example. Requests may carry a named policy_requirement;
     # repository requirements must quote independently verified file evidence.
-    if report.get("decision") == "ready":
+    proposal = report.get("proposal_basis")
+    if report.get("decision") == "ready" and isinstance(proposal, dict):
+        refs = proposal.get("evidence_ids")
+        supported = (
+            proposal.get("kind")
+            in {
+                "adopt_observed",
+                "capacity_change",
+                "configuration_fix",
+                "preventive_change",
+            }
+            and proposal.get("requires_maintainer_approval") is True
+            and isinstance(proposal.get("rationale"), str)
+            and bool(proposal["rationale"].strip())
+            and isinstance(proposal.get("assumptions"), list)
+            and isinstance(refs, list)
+            and bool(refs)
+            and all(ref in verified_ids for ref in refs)
+        )
+        if not supported:
+            blockers.append(
+                "A proposal needs verified evidence, an explicit rationale/assumptions, and mandatory maintainer approval."
+            )
+        elif proposal["kind"] == "adopt_observed":
+            ev = next(
+                (
+                    item
+                    for item in evidence
+                    if item.get("id") == proposal.get("measurement_evidence_id")
+                ),
+                {},
+            )
+            candidates = [
+                r
+                for r in host_records
+                if r["tool"] == ev.get("tool")
+                and matches_output(ev.get("tool_output_excerpt"), r["output"])
+            ]
+            measured = False
+            for record in candidates:
+                outputs = [record["output"]]
+                try:
+                    transported = json.loads(record["output"])
+                    if isinstance(transported, list) and all(
+                        isinstance(x, str) for x in transported
+                    ):
+                        outputs = transported
+                except ValueError:
+                    pass
+                for output in outputs:
+                    try:
+                        value = json.loads(output)
+                    except ValueError:
+                        value = output.strip()
+                    try:
+                        for key in proposal.get("measurement_path", []):
+                            value = (
+                                value[int(key)]
+                                if isinstance(value, list)
+                                else value[key]
+                            )
+                    except (KeyError, IndexError, TypeError, ValueError):
+                        continue
+                    measured |= (
+                        isinstance(value, (str, int, float))
+                        and not isinstance(value, bool)
+                        and str(value).strip()
+                        == str(proposal.get("observed_value")).strip()
+                        == str(proposal.get("proposed_value")).strip()
+                    )
+            if not measured:
+                blockers.append(
+                    "Observed-state adoption must use the exact measured host value, never a context packet or guessed value."
+                )
+        elif proposal["kind"] == "capacity_change":
+            error = validate_capacity(report, host_records)
+            if error:
+                blockers.append(error)
+        if packet.get("collection_complete") is not True:
+            blockers.append(
+                "The deterministic repository and host snapshot must be complete before proposing a change."
+            )
+    elif report.get("decision") == "ready":
         basis = report.get("policy_basis") or {}
         quote = basis.get("requirement") if isinstance(basis, dict) else None
         established = (

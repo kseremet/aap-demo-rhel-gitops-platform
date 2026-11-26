@@ -69,7 +69,7 @@ def test_schema_contracts_and_graph(path):
             schema = node["parameters"]["response_schema"]
             jsonschema.Draft7Validator.check_schema(schema)
             jsonschema.validate(example(schema), schema)
-            prompt = nodes["handoff_" + name]["parameters"]["body"]["template"]
+            prompt = nodes["input_" + name]["parameters"]["body"]["template"]
             assert json.dumps(schema, separators=(",", ":")) not in prompt
             assert (
                 "Response contract (also enforced as the response schema):"
@@ -193,268 +193,126 @@ def ao_runtime():
 
 
 @pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.stem)
+def test_three_roles_have_no_loop_or_hidden_reporter(path):
+    w = yaml.safe_load(path.read_text())
+    nodes = {n["id"]: n for n in w["nodes"]}
+    assert [n["id"] for n in w["nodes"] if n["type"] == "agentic"] == [
+        "investigate",
+        "propose",
+        "review",
+    ]
+    assert len(nodes) == 14
+    assert not any(n["type"] in ("loop", "script") for n in nodes.values())
+    assert (
+        nodes["collect_evidence"]["parameters"]["job_template_name"]
+        == "JT - AO Collect Evidence"
+    )
+    assert nodes["propose"]["parameters"]["tool_selections"] == [
+        "__AO_HANDOFF_TOOL_IDS__"
+    ]
+    for role in ("investigate", "propose", "review"):
+        assert (
+            nodes[role]["parameters"]["prompt"]
+            == "${input_" + role + ".result.body.prompt}"
+        )
+        prompt = nodes["input_" + role]["parameters"]["body"]["template"]
+        assert "maintainer" in prompt.lower()
+    assert (
+        nodes["validate_evidence"]["parameters"]["extra_vars"]["ao_evidence"]
+        == "${compile_proposal.result.body.packet}"
+    )
+    assert (
+        nodes["publish_proposal"]["parameters"]["extra_vars"]["ao_evidence"]
+        == "${compile_proposal.result.body.packet}"
+    )
+
+
+@pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.stem)
 @pytest.mark.parametrize(
-    "decision,approved,checks,terminal",
+    "decision,valid,approved,blockers,port",
     [
-        ("ready", True, 0, "publish_proposal"),
-        ("ready", True, 1, "publish_proposal"),
-        ("ready", True, 4, "publish_proposal"),
-        ("no_change", False, 0, "report_no_change"),
-        ("blocked", False, 2, "report_blocked"),
-        ("ready", False, 1, "report_rejected_plan"),
+        ("ready", True, True, [], "case_0"),
+        ("ready", False, True, [], "default"),
+        ("ready", True, False, [], "default"),
+        ("ready", True, True, ["missing capacity"], "default"),
+        ("blocked", False, True, [], "default"),
+        ("no_change", True, False, [], "case_1"),
+        ("no_change", False, False, [], "default"),
+        ("no_change", True, False, ["unproven diagnosis"], "default"),
     ],
 )
-def test_routing_and_loop_expression_resolution(
-    path, decision, approved, checks, terminal
-):
-    NamespaceResolver, evaluate = ao_runtime()
-    workflow = yaml.safe_load(path.read_text())
-    nodes = {n["id"]: n for n in workflow["nodes"]}
-    outgoing = defaultdict(list)
-    for edge in workflow["edges"]:
-        outgoing[edge["from"]].append(edge)
-    resolver = NamespaceResolver()
-    resolver.set_namespace(
-        "trigger", {"description": "Investigate web-01", "target_host": "web-01"}
-    )
-    resolver.set_namespace(
-        "workflow_context", {"execution": {"id": "offline-routing-test"}}
-    )
-    current = outgoing["trigger_eda"][0]["to"]
-    loop_results = []
-    trace = []
-    inside_loop = False
-    while True:
-        assert (
-            len(trace) < 100
-        ), "Workflow did not terminate within its diagnostic bound"
-        node = nodes[current]
-        trace.append(current)
-        resolver.set_context(loop_node_id="evidence_loop" if inside_loop else None)
-        kind = node["type"]
-        port = None
-        if kind == "loop":
-            params = resolver.resolve_dict(node["parameters"])
-            if len(loop_results) < len(params["items"]):
-                assert len(loop_results) < params["max_iterations"]
-                resolver.set_namespace(
-                    current,
-                    {"iteration_count": len(loop_results), "iteration_results": None},
-                )
-                resolver.set_namespace(
-                    "loop",
-                    {
-                        "evidence_loop": {
-                            "index": len(loop_results),
-                            "item": params["items"][len(loop_results)],
-                        }
-                    },
-                )
-                inside_loop, port = True, "iterate"
-            else:
-                # AO checks the max before asking its activity for completion;
-                # leave one spare control turn beyond the four allowed checks.
-                assert len(loop_results) < params["max_iterations"]
-                resolver.set_namespace(
-                    current,
-                    {
-                        "status": "completed",
-                        "iteration_count": len(loop_results),
-                        "iteration_results": {"follow_up_check.result": loop_results},
-                    },
-                )
-                inside_loop, port = False, "complete"
-        elif kind == "switch":
-            port = node["parameters"]["default_port"]
-            for case in node["parameters"]["cases"]:
-                if evaluate(case["condition"], resolver.get_complete_namespace()):
-                    port = case["port"]
-                    break
-        elif kind == "condition":
-            port = (
-                "true"
-                if evaluate(
-                    node["parameters"]["condition"], resolver.get_complete_namespace()
-                )
-                else "false"
-            )
-        else:
-            params = resolver.resolve_dict(node["parameters"])
-            if kind == "http_request" and current == "prepare_review":
-                normalize = runpy.run_path(str(ROOT / "files/ao/review_checks.py"))[
-                    "prepare_review"
-                ]
-                resolver.set_namespace(
-                    current, {"result": {"body": normalize(params["body"]["review"])}}
-                )
-                current = outgoing[current][0]["to"]
-                continue
-            if kind == "http_request" and current == "prepare_assessment":
-                resolver.set_namespace(
-                    current, {"result": {"body": {"report": params["body"]["report"]}}}
-                )
-                current = outgoing[current][0]["to"]
-                continue
-            if kind == "http_request":
-                env = params["body"]
-                prepare = runpy.run_path(
-                    str(ROOT / "files/ao/prepare_agent_prompt.py")
-                )["prepare_prompt"]
-                output = prepare(
-                    env["template"],
-                    env["contexts"],
-                    env["stage"],
-                )
-                resolver.set_namespace(current, {"result": {"body": output}})
-                current = outgoing[current][0]["to"]
-                continue
-            if current == "follow_up_check":
-                assert f"Check index:\n{len(loop_results)}\n" in params["prompt"]
-                assert f"Check {len(loop_results)}" in params["prompt"]
-            if current == "validate_evidence":
-                resolver.set_namespace(
-                    current,
-                    {
-                        "artifacts": {
-                            "ao_evidence_validation": {
-                                "valid": decision != "blocked",
-                                "blocking_findings": [],
-                            }
-                        }
-                    },
-                )
-                current = outgoing[current][0]["to"]
-                continue
-            if kind == "aap_job_template":
-                assert current == terminal
-                assert params["extra_vars"]["ao_report"]["decision"] == "ready"
-                assert params["extra_vars"]["ao_review"]["approved"] is True
-                break
-            result = example(params["response_schema"])
-            if current == "review_evidence":
-                result["blocking_findings"] = [f"Check {i}" for i in range(checks)]
-                result["follow_up"] = [
-                    dict(
-                        finding=f"Check {i}",
-                        question=f"Check {i}",
-                        reason="Missing observation",
-                        success_criterion="Source-attributed result",
-                    )
-                    for i in range(checks)
-                ]
-            if current == "final_assessment":
-                result["decision"] = decision
-                result["conclusion_status"] = "confirmed"
-            if current == "review_plan":
-                result.update(
-                    approved=approved,
-                    blocking_findings=[] if approved else ["Unproven edit"],
-                )
-            jsonschema.validate(result, params["response_schema"])
-            resolver.set_namespace(
-                current,
-                {
-                    "id": str(uuid4()),
-                    "result": {"content": result, "tools_used": ["get_file_contents"]},
-                },
-            )
-            if current == "follow_up_check":
-                loop_results.append({"content": deepcopy(result)})
-        successors = [
-            e
-            for e in outgoing[current]
-            if e.get("from_port") == port or "from_port" not in e
-        ]
-        if not successors:
-            assert current == terminal
-            break
-        assert len(successors) == 1
-        current = successors[0]["to"]
-    assert trace.count("follow_up_check") == checks
-    assert ("publish_proposal" in trace) == (terminal == "publish_proposal")
-
-
-def test_diagnostic_budget_is_enforced_before_the_loop():
+def test_real_ao_publication_routing(path, decision, valid, approved, blockers, port):
     _, evaluate = ao_runtime()
-    for path in WORKFLOWS:
-        workflow = yaml.safe_load(path.read_text())
-        gate = next(n for n in workflow["nodes"] if n["id"] == "limit_checks")
-        for count, allowed in [(0, True), (4, True), (5, False)]:
-            namespace = {
-                "prepare_review": {"result": {"body": {"follow_up": [{}] * count}}}
-            }
-            assert evaluate(gate["parameters"]["condition"], namespace) is allowed
+    w = yaml.safe_load(path.read_text())
+    gate = next(n for n in w["nodes"] if n["id"] == "route_assessment")["parameters"]
+    namespace = {
+        "validate_evidence": {
+            "artifacts": {"ao_evidence_validation": {"valid": valid}}
+        },
+        "compile_proposal": {"result": {"body": {"report": {"decision": decision}}}},
+        "review": {
+            "result": {"content": {"approved": approved, "blocking_findings": blockers}}
+        },
+    }
+    matched = next(
+        (c["port"] for c in gate["cases"] if evaluate(c["condition"], namespace)),
+        gate["default_port"],
+    )
+    assert matched == port
 
 
 @pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.stem)
 def test_visual_editor_roundtrip_preserves_gate_semantics(path, tmp_path):
-    import re
-    import shutil
-    import subprocess
+    import shutil, subprocess
 
-    _, evaluate = ao_runtime()
     node = shutil.which("node")
-    if not node:
-        pytest.skip(
-            "Optional Node 24+ runtime for AO visual-editor regression is absent"
-        )
-    major = int(
-        subprocess.check_output([node, "--version"], text=True)
-        .strip()
-        .lstrip("v")
-        .split(".")[0]
-    )
-    if major < 24:
-        pytest.skip("Optional visual-editor regression requires Node 24+")
+    if not node or not SOURCES.exists():
+        pytest.skip("Node and AO source required")
+    _, evaluate = ao_runtime()
     source = SOURCES.parents[1] / "frontend/packages/syntara-ui/src/utils/expressions"
-    workflow = yaml.safe_load(path.read_text())
-    gates = {
-        n["id"]: n["parameters"]["condition"]
-        for n in workflow["nodes"]
-        if n["type"] == "condition"
-    }
-    completed = subprocess.run(
+    w = yaml.safe_load(path.read_text())
+    cases = next(n for n in w["nodes"] if n["id"] == "route_assessment")["parameters"][
+        "cases"
+    ]
+    output = subprocess.run(
         [
             node,
             str(ROOT / "tests/ao_expression_roundtrip.mjs"),
             str(source),
             str(tmp_path),
         ],
-        input=json.dumps(list(gates.values())),
+        input=json.dumps([c["condition"] for c in cases]),
         text=True,
         capture_output=True,
         check=True,
     )
-    results = json.loads(completed.stdout)
-    for gate, result in zip(gates, results, strict=True):
-        assert result["once"] == result["twice"], result
-        # Saved templates must contain paths only, never nested function syntax.
-        for reference in re.findall(r"\$\{([^}]+)\}", result["twice"]):
-            assert "${" not in reference and "(" not in reference, result
-        condition = result["twice"]
-        if gate == "limit_checks":
-            for count in [0, 1, 4, 5, 6]:
-                namespace = {
-                    "prepare_review": {"result": {"body": {"follow_up": [{}] * count}}}
-                }
-                assert evaluate(condition, namespace) is (count <= 4)
-        elif gate == "approve_plan":
-            for approved, blockers in [
-                (True, []),
-                (False, []),
-                (True, ["unproven edit"]),
-            ]:
-                namespace = {
-                    "review_plan": {
-                        "result": {
-                            "content": {
-                                "approved": approved,
-                                "blocking_findings": blockers,
-                            }
+    for case, result in zip(cases, json.loads(output.stdout), strict=True):
+        assert result["once"] == result["twice"]
+        for decision in ("ready", "no_change", "blocked"):
+            for valid in (True, False):
+                for approved in (True, False):
+                    for blockers in ([], ["unproven"]):
+                        ns = {
+                            "validate_evidence": {
+                                "artifacts": {
+                                    "ao_evidence_validation": {"valid": valid}
+                                }
+                            },
+                            "compile_proposal": {
+                                "result": {"body": {"report": {"decision": decision}}}
+                            },
+                            "review": {
+                                "result": {
+                                    "content": {
+                                        "approved": approved,
+                                        "blocking_findings": blockers,
+                                    }
+                                }
+                            },
                         }
-                    }
-                }
-                assert evaluate(condition, namespace) is (approved and not blockers)
+                        assert evaluate(case["condition"], ns) == evaluate(
+                            result["twice"], ns
+                        )
 
 
 @pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.stem)
@@ -480,7 +338,7 @@ def test_frontend_accepts_all_workflow_variable_references(path, tmp_path):
     )
     workflow = yaml.safe_load(path.read_text())
     broken = deepcopy(workflow)
-    follow_up = next(n for n in broken["nodes"] if n["id"] == "follow_up_check")
+    follow_up = next(n for n in broken["nodes"] if n["id"] == "investigate")
     follow_up["parameters"]["prompt"] += "\n${loop.index}\n${loop.item}"
     completed = subprocess.run(
         [
@@ -500,65 +358,6 @@ def test_frontend_accepts_all_workflow_variable_references(path, tmp_path):
         'node or trigger "loop" does not exist' in error["message"]
         for error in regression_errors
     )
-
-
-@pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.stem)
-def test_missing_tool_execution_stops_each_collector(path):
-    _, evaluate = ao_runtime()
-    workflow = yaml.safe_load(path.read_text())
-    nodes = {n["id"]: n for n in workflow["nodes"]}
-    for stage in ["scope_request", "investigate_host", "map_repository"]:
-        condition = nodes[stage + "_tools"]["parameters"]["condition"]
-        for used, allowed in [([], False), (None, False), (["read_file"], True)]:
-            assert (
-                evaluate(condition, {stage: {"result": {"tools_used": used}}})
-                is allowed
-            )
-        target = next(
-            e["to"]
-            for e in workflow["edges"]
-            if e["from"] == stage + "_tools" and e["from_port"] == "false"
-        )
-        assert target == "handoff_report_" + stage + "_tools"
-        reporter = next(e["to"] for e in workflow["edges"] if e["from"] == target)
-        assert nodes[reporter]["parameters"]["tool_selections"] == [
-            "__AO_HANDOFF_TOOL_IDS__"
-        ]
-
-
-@pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.stem)
-@pytest.mark.parametrize("decision", ["ready", "no_change"])
-def test_neither_success_route_can_bypass_evidence_validation(path, decision):
-    _, evaluate = ao_runtime()
-    nodes = {n["id"]: n for n in yaml.safe_load(path.read_text())["nodes"]}
-    case = next(
-        c
-        for c in nodes["route_assessment"]["parameters"]["cases"]
-        if c["port"] == {"ready": "case_0", "no_change": "case_1"}[decision]
-    )
-    for verified, certainty, blockers, allowed in [
-        (True, "confirmed", [], True),
-        (False, "confirmed", [], False),
-        (True, "hypothesis", [], False),
-        (True, "confirmed", ["Unresolved cause"], False),
-    ]:
-        ns = {
-            "validate_evidence": {
-                "artifacts": {"ao_evidence_validation": {"valid": verified}}
-            },
-            "prepare_assessment": {
-                "result": {
-                    "body": {
-                        "report": {
-                            "decision": decision,
-                            "conclusion_status": certainty,
-                            "blocking_findings": blockers,
-                        }
-                    }
-                }
-            },
-        }
-        assert evaluate(case["condition"], ns) is allowed
 
 
 def test_visual_editor_preserves_all_switch_branch_ports(tmp_path):

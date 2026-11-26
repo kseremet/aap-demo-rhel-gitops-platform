@@ -33,7 +33,7 @@
       {{ _ao_tool_catalogs.results[0].json.resources
          | selectattr('enabled', 'equalto', true)
          | selectattr('status', 'equalto', 'available')
-         | selectattr('name', 'in', ['get_system_information', 'read_file',
+         | selectattr('name', 'in', ['get_system_information', 'read_file', 'list_block_devices',
              'list_files', 'list_directories', 'get_service_status', 'get_service_logs',
              'get_journal_logs', 'read_log_file', 'list_services', 'get_process_info',
              'list_processes', 'get_listening_ports', 'get_network_connections',

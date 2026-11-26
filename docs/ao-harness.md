@@ -1,127 +1,87 @@
 # Automation Orchestrator investigation harness
 
-This harness supports AAP 2.6 and the AO 2026.8 workflow format represented in the
-reference documentation. Both incident and maintainer-feedback workflows use the
-same investigation, evidence review, and publication gates. CrewAI remains a
-separate backend. AO model selection is still controlled by `demo_ao_llm_model`. This value is the
-provider model identifier (`model_id`, for example `gpt-4.1`), not the UI display
-label. CasC queries that exact identifier and requires an enabled model.
-
-## Investigation and review
+Both workflows use the same three-agent harness on the installed AO version:
 
 ```text
-GitHub / EDA event
-        |
-Understand request and pin repository / PR context
-        |
-Collect targeted host evidence
-        |
-Trace repository variables, scope, and consuming System Role
-        |
-Analyze cause and alternatives
-        |
-Independent evidence review
-        |
-For each requested check (0 to 4): collect the missing observation
-        |
-Final assessment with the original and additional evidence
-        |
-Read-only AAP evidence validation against runtime tool traces
-        |
-        +-- no_change --> report why no repository edit is needed
-        +-- blocked ----> report missing evidence / contradictions
-        |
-        +-- ready --> prepare complete variable-file edits
-                             |
-                      Independent plan review
-                             |
-                             +-- rejected --> report blockers; no writer call
-                             |
-                             +-- approved --> AAP validates and publishes
+Event or maintainer feedback
+  -> AAP: pinned repository snapshot and read-only target facts
+  -> Agent 1: investigate cause, measurements and durable alternatives
+  -> Agent 2: propose exact desired-state edits
+  -> Agent 3: independently review diagnosis, scope and exact edits
+  -> AAP: deterministic evidence validation
+       ready + approved -> AAP writer -> PR for human review
+       verified no_change -> explanation
+       otherwise -> specific blocked report
 ```
 
-| Step | Responsibility |
-|---|---|
-| Request scoping | Read the issue or PR discussion; identify the host, actual requirement, repository, refs, and inspected commit. A question or approval alone does not request a revision. |
-| Host investigation | Verify the target host and collect measurements relevant to the symptom. Do not diagnose the MCP container or equate a configuration mismatch with a proven outage. |
-| Repository mapping | Establish active values, commented examples, inventory scope, baseline/group/host precedence, and the role consuming the result. |
-| Causal analysis | Compare observed state, declared state, and policy. Consider reconciliation without a repository edit and other competing explanations. |
-| Evidence review and loop | Challenge unsupported conclusions and request up to four specific, obtainable observations. The loop runs once for each check and aggregates results; it is skipped when there are no checks. |
-| Final assessment | Resolve every finding or return blocked. Preserve the evidence, causal explanation, scope, alternatives, future validation, and limitations. |
-| Edit planning and independent review | Inspect complete files at the pinned revision and check every proposed leaf change, affected host/group, and consuming variable. |
+There is no diagnostic loop or separate model step for each report section.
+An agent failure stops the run. The writer has automatic retries disabled.
+AO response schemas define structure; prompts describe concise role requirements.
+The configured model remains `demo_ao_llm_model` (the provider model identifier,
+for example `gpt-4.1`). No AO source or image modification is required.
 
-The condition gates use the visual builder's `exists` and `isEmpty` operators.
-The four-check gate verifies that a fifth list item does not exist. The publication
-gate requires approval and an empty blocker list. Do not replace these with raw
-`len(...)` calls: the backend supports them, but the current visual editor can
-serialize them into malformed nested variable references when saving.
+## Facts, proposals, and approval
 
-The diagnostic agent references the named loop output
-`evidence_loop.iteration_count` and the reviewer's original checklist, resolving
-only the check at that zero-based index. Avoid the `loop.index` / `loop.item`
-shorthand in saved prompts: the checked-out backend understands it, but the
-frontend variable-reference validator rejects `loop` as an unknown node.
+The harness distinguishes measured current state, active declarations, and a
+recommended future state. A maintainer need not have already approved that future
+state before the workflow can **propose** it. For example, an observed somaxconn
+value can be proposed as an explicit host override if the diagnosis explains why
+keeping it is preferable to reconciliation back to the baseline. The PR clearly
+states its assumptions and that human approval is pending. It never merges or
+applies its own proposal.
 
-There is one diagnostic refinement cycle per run. Unresolved gaps do not start an
-unbounded retry loop or force a PR. Each agent step has a 1,200-second timeout and
-stops the branch on failure. The loop has an engine limit of five control turns:
-a condition rejects more than four checks before the loop starts, and the current
-AO engine checks its limit before the final completion turn. The AAP publication node has automatic retries disabled because a
-blind retry after publication could create a second proposal.
+The shared prompts cover daily events rather than a fixed somaxconn recipe:
+configuration drift, service faults, filesystem pressure, and resource capacity.
+Agents should consider recurrence, retention, leaks, growth, safer alternatives,
+and the narrowest justified scope. They may propose only variables consumed by
+the existing desired-state repository. An unsupported change needs a separate
+implementation; the workflow must explain the limitation rather than invent a
+variable or execute a command on a managed host.
 
-Every agent has an explicit response schema, which is the authoritative output
-structure. Prompts describe concise, role-specific handoff requirements rather
-than duplicating the JSON schema. They require a self-contained evidence packet:
-the checked-out AO runtime converts the agent's final answer into structured JSON
-in a separate call, without the full tool transcript. A schema alone cannot recover
-observations that the investigative answer omitted. The harness changes no AO
-runtime source or global system prompt.
+For LV expansion, the AAP foundation measures filesystem usage, mounted device,
+LV/VG identity and VG free capacity. The validator rejects shrinking, missing or
+inconsistent mappings, and growth beyond measured headroom (with a rounding
+reserve). The writer binds the proposed size to the measured LV through the
+repository's baseline/group/host storage merge and permits target-host storage
+scope only. An LV proposal therefore needs an existing managed volume and backing
+capacity; it cannot assume that an underlying virtual disk will expand itself.
+A disk-pressure event alone does not establish that expansion is the best remedy.
 
-## Tool execution and evidence provenance
+## Read-only foundation and strict evidence gates
 
-CasC discovers explicit, available read-only tool UUIDs from the two demo MCP
-integrations. Repository steps receive GitHub tools, the host step receives Linux
-tools, and cross-check steps receive both. Other project integrations and write
-tools are excluded. The three initial collectors must record an actual tool call;
-a missing call routes to a dedicated blocked terminal. A recorded call alone does
-not establish a successful measurement.
+**JT - AO Collect Evidence** resolves one real inventory host and pins the base
+commit, or the original open PR head for feedback. It reads the full Git tree and
+all supported baseline/group declarations, target overlays, merge tasks,
+entrypoint, and inventory files. Blob hashes verify complete contents; truncated
+or oversized snapshots fail closed. Vault/secret files are excluded. Collection
+is limited to 64 files and 128 KiB of source text, not silent truncation.
 
-The Linux MCP endpoint uses unauthenticated HTTP. To preserve the UI workaround,
-CasC creates a dedicated **RHEL GitOps Linux MCP** HTTP Bearer Token credential
-(named by `demo_ao_mcp_integration_name`) containing a non-secret dummy value.
-Steps selecting Linux tools explicitly associate that credential with Linux MCP.
-GitHub tools retain the **RHEL GitOps GitHub MCP** credential and its real GitHub
-token. The dummy header satisfies AO's connection UI; Linux MCP does not validate
-it, and it does not supply SSH credentials or fix host reachability. CasC preserves
-these separate mappings on every workflow import.
+The same job runs Ansible setup on the target with privilege escalation to read
+identity, device, filesystem, and LVM facts. It does not change configuration.
+Only selected facts are returned; environment variables and SSH credentials are
+not included. The investigator uses read-only Linux/GitHub MCP tools for the
+specific missing measurements, with a prompt budget of 12 calls. The reviewer
+has 8 calls for focused challenge. These are reasoning budgets, not engine
+resource quotas. Neither role has write tools.
 
-Before importing workflows, CasC refreshes the existing managed Linux MCP SSH
-aliases from running VMIs. It preserves the ConfigMap's policy, SSH identity, and
-unrelated entries and does not rewrite generated local inventory files. Custom
-external MCP endpoints remain responsible for their own host addressing. Projected
-ConfigMap changes can take a short time to reach the MCP pod.
+A fixed helper creates evidence IDs from successful collection and runtime tool
+results. The proposer selects IDs; code supplies exact source paths, excerpts,
+repository identity, blob SHAs, and PR identity. Agents cannot supply invented
+citations. AAP still checks successful paired calls/results, pinned revision,
+target identity, exact excerpts, host and repository support, and unresolved
+blockers. The writer repeats validation immediately before publication.
 
-Every reported observation includes an exact `tool_output_excerpt`. The workflows
-send the original runtime invocation wrappers, including loop/assessor outputs,
-to **JT - AO Evidence Validation**. This read-only AAP job requires matched,
-successful `tool_call`/`tool_result` pairs, rejects tool errors, checks the commit
-against a real `get_commit` result, requires file reads pinned to that commit,
-and requires identity and supporting measurements for the actual target host.
-Each claimed excerpt and tool name must match a successful runtime result.
-For structured JSON results, a selected object of unchanged returned fields is
-compared by key and typed value, allowing JSON spacing and subset formatting.
-The validator accepts AO's `functions.` display prefix and complete short scalar
-outputs; short substrings and excerpts attributed to a different file are rejected.
-Agent-written reasoning and `tools_used` summaries cannot supply this proof.
+Observed-state adoption also requires the exact selected host measurement and
+value. Proposal rationale and assumptions are mandatory. Missing diagnostic facts
+remain blocking; unknown historical provenance or future human approval alone do
+not. Independent approval with an empty blocker list is required for publication.
+A no-change decision also requires verified evidence. Existing legacy policy
+contracts remain accepted for already published workflows.
 
-Both `ready` and `no_change` require this validator's positive verdict, a confirmed
-assessment, and no final blocking findings. Each original reviewer blocker needs
-an explicit resolution naming that finding and supported evidence IDs. An empty
-follow-up checklist does not clear blockers. Missing observations must produce
-`blocked`, including when no repository edit can yet be justified. The writer
-repeats the same evidence validation at the mutation boundary. These checks prove
-trace provenance and declared scope, not every semantic inference an agent makes;
-independent plan review and human review remain required.
+Monitoring payloads should name `target_host`; vague or ambiguous targets fail
+before any investigation. For existing PR feedback the helper preserves the
+original repository, PR number and head. New PR reports include a small target
+context marker to make subsequent feedback unambiguous.
 
 ## AAP publication contract
 
@@ -182,188 +142,65 @@ output and GitHub before manually relaunching such a failed publication.
 
 ## Apply and live-test
 
-Changes in the local checkout do not alter deployed workflows or the AAP project.
-Make the revised platform files available to the project's SCM source using your
-normal review process before running its AAP job; local uncommitted files are not
-available to a remote AAP project sync. The workflow and writer contracts must be
-updated together.
-
-From this platform repository, apply AO and AAP configuration together:
+Apply the platform revision, adapter helper, AAP template and AO drafts together.
+Do not delete the existing AO workflows; CasC updates their drafts in place.
+From the demo root with your configured Python environment and dependencies:
 
 ```bash
-ansible-playbook playbooks/casc.yml --vault-id @prompt
-```
-
-### Test the published platform revision
-
-When the supporting services and integrations are already configured, do not
-rerun VM provisioning. CasC refreshes the managed MCP SSH aliases from the current
-VM addresses; it does not redeploy the server. From the updated platform checkout:
-
-```bash
-ansible-playbook playbooks/casc.yml --syntax-check
-# Use --vault-id @prompt only when vault.yml is encrypted.
 ansible-playbook playbooks/casc.yml
 ```
 
-The importer updates workflows with matching names in place. Deleting them is
-optional and removes their execution/version history. Export them first if you
-want a clean recreation. Delete only `rhel-gitops-incident-investigation` and
-`rhel-gitops-pr-review`; retain their project, integrations, and credentials.
+Use `--vault-id @prompt` when your vault is encrypted. The platform AAP project
+must sync to the pushed revision before creating **JT - AO Collect Evidence**.
+That template uses the fleet inventory, machine credential and GitHub API Access.
+Both the evidence validator and writer must use this same platform revision.
+Refresh the AO editor and publish each updated draft before running mock data.
 
-CasC forces a platform Project sync and waits for completion in the projects
-role before creating job templates. This refreshes the playbook catalog even when
-the Project configuration itself is unchanged. `scm_update_on_launch` only updates
-the Project at job launch, so it cannot supply a missing playbook during template
-creation. New playbooks must already be committed to the configured SCM branch.
-A failed sync stops CasC before template creation.
+A generic drift event needs no pre-approved policy requirement:
 
-After CasC completes:
-
-1. Confirm CasC created **JT - AO Evidence Validation** alongside the writer.
-   Confirm the AAP `rhel-gitops-platform` project (or your configured project
-   name) synced successfully and its SCM revision contains the writer,
-   evidence-validator playbook, and filter plugins.
-2. Sync the EDA `RHEL GitOps EDA` project if needed and confirm the GitHub rulebook
-   activation is enabled. CasC refreshes the bridge's AO service-account credential.
-3. Open both imported AO workflows and publish their latest versions. An existing
-   published version is not automatically replaced just by saving an update.
-4. Create a new issue in the state repository with the `ai-investigate` label and
-   the same `web-01` / `net.core.somaxconn` incident wording used for CrewAI.
-5. Follow EDA to `JT - AO Event Bridge`, the AO investigation, and then
-   `JT - AO Evidence Validation`, then `JT - AO GitOps Action` only if the
-   evidence is verified, the assessment is ready, and independent review approves.
-   No-change and blocked outcomes intentionally do not create a PR.
-6. Inspect the complete PR report and effective YAML change. Add a scoped revision
-   request to that PR and verify the feedback workflow updates the same branch.
-   Keep the PR unmerged until you are ready to run normal reconciliation.
-
-For a local-only writer check, use the tests below. They run the actual playbook
-against a loopback-only fake GitHub API with dummy credentials. No deployment,
-managed-host changes, real GitHub writes, or live model requests are involved.
-
-```bash
-python3.13 -m venv /tmp/ao-harness-check
-/tmp/ao-harness-check/bin/pip install -r tests/requirements.txt
-PATH=/tmp/ao-harness-check/bin:$PATH /tmp/ao-harness-check/bin/pytest -q tests/
+```json
+{
+  "incident_id": "demo-web-01-somaxconn",
+  "target_host": "web-01",
+  "description": "Investigate net.core.somaxconn drift on web-01. Compare the running value with active repository declarations and propose a durable resolution for maintainer review."
+}
 ```
 
-When AO's source exists under the parent workbench's `references/syntara`, the
-workflow tests additionally validate importer substitutions against AO's schemas
-and resolve routing expressions using AO's actual evaluator. Without that optional
-checkout, those checks are skipped; writer tests and local graph/contract checks
-still run. With Node 24+ available, an additional check uses AO's actual visual
-expression parser and serializer to verify saved conditions retain their meaning,
-and its frontend variable-reference validator to check every workflow parameter.
+A capacity event uses the same workflow and schema, for example:
 
-Mock only the trigger event. Pinned agent outputs are not fresh runtime evidence.
+```json
+{
+  "incident_id": "demo-web-01-data-pressure",
+  "target_host": "web-01",
+  "description": "Monitoring reports /data is running out of space. Verify current utilization and causes, evaluate durable remedies, and propose an appropriate desired-state change if it is feasible."
+}
+```
 
-For live validation, use the same incident wording and repository revision as the
-CrewAI comparison. Inspect every agent's final output and actual tool arguments /
-results. Check these outcomes:
-
-1. A justified incident produces an effective variable change and a complete PR,
-   with measured runtime state distinguished from the desired policy.
-2. A missing diagnostic or ambiguous policy produces blocked with specific gaps.
-3. Runtime drift with correct declared intent produces no_change when a Git edit
-   is unnecessary; the harness does not launch reconciliation itself.
-4. A scoped maintainer revision changes the existing PR branch and refreshes the
-   explanation. An approval or question alone produces no file changes.
-5. A deliberately stale file, rejected review, or invalid second file produces no
-   GitHub mutations during preflight. An unrelated README replacement is rejected.
-6. Repeated new incidents create separate branches; review comments do not trigger
-   recursive EDA runs.
-
-Local checks do not establish live success. Record the results in `docs/testing.md`
-only after the maintainer confirms the testing-log update.
-
-## Runtime findings from the comparison incident
-
-On 2026-11-26, AO 1.3.0 accepted isolated tool calls with and without response
-schemas. GitHub `get_commit` returned the actual repository commit. The earlier
-incident had made zero tool calls and repeated fabricated host/policy claims.
-The harness now makes calls mandatory and rejects unsupported outcomes.
-
-Live diagnostics also found Linux MCP SSH aliases that differed from the current
-VMI addresses; the observations did not establish when VM addresses changed.
-Linux MCP authorized the calls but SSH timed out against those stale aliases.
-The aliases were refreshed from live VMIs, and the same repair is now part of CasC.
-A subsequent AO call identified `web-01-gitops`, and the updated bounded host
-prompt measured the actual somaxconn value `65535` through Linux MCP.
-A subsequent incident invocation reproduced
-`Type is not msgpack serializable: ToolMessage`. The actual cause is an embedded
-MCP file resource: the adapter leaves its typed `AnyUrl` URI in the tool artifact,
-which breaks checkpoint serialization, and hides its file body from model-visible
-content. A missing-file tool error occurred in the same run but is not the root
-cause; ordinary error ToolMessages serialize correctly.
-
-The tested AO source fix and exact runtime versions are documented in
-[the compatibility patch notes](../patches/automation-orchestrator/README.md).
-The patch normalizes MCP results before tool messages are emitted, preserving
-file text in model history and traces and keeping artifacts JSON-safe. It requires
-an AO backend image rollout and is not applied by `playbooks/casc.yml`.
-The demo does not modify installed AO packages or its global system prompt.
-
-For the current unmodified AO deployment, CasC now enables a
-[GitHub MCP text compatibility sidecar](github-mcp-text-adapter.md). It converts
-embedded file bodies to text on the existing GitHub MCP hostname, port 8083.
-Live integration validation succeeded, and an isolated first-node test completed
-with real file contents in its tool trace and no checkpoint error. Both workflows
-share this integration; no workflow prompt/schema change is required for the
-transport workaround. Full incident and PR feedback tests remain pending.
-
-The evidence validator accepts pinned file reads expressed through either GitHub
-MCP argument name, `sha` or `ref`. Both require the exact inspected commit; a
-moving branch or conflicting aliases are rejected.
+Use actual monitoring observations for a live demonstration. A synthetic warning
+against a healthy filesystem may correctly produce no change. Review the collected
+baseline, measurements, recommendation, alternatives and independent review; then
+check the AAP validation artifacts and resulting PR. Confirm that no host changed
+until a human merges and the existing reconciliation automation runs. Test PR
+feedback against the created PR separately. Local regressions do not establish
+end-to-end live success; the testing log remains Partial until that is confirmed.
 
 ## Compact handoffs and the invocation API limit
 
-The installed invocation API rejects a `prompt` longer than 10,000 characters,
-although the workflow engine itself permits a larger resolved prompt. The
-2026-11-26 review failure was HTTP 422 on `body.prompt`: copying three complete
-invocation wrappers expanded that prompt to 74,300 characters. This was separate
-from the earlier embedded-resource checkpoint defect.
+AO limits initial agent prompts to 10,000 characters. Native HTTP nodes call the
+existing GitHub MCP text adapter's fixed preparation functions. Large contexts
+remain complete in opaque, short-lived MCP-readable packets; agents call
+`read_handoff` to retrieve them. No evidence or full file contents are silently
+truncated. Raw successful results also reach the validator outside the model
+prompt. The internal helper accepts bounded JSON, not executable code, and uses
+no host or controller credentials. Packet IDs grant temporary read access, so
+keep them within the demo environment. Packets are memory-only, expire after one
+hour, and require the adapter's existing single replica.
 
-Both workflows now prepare every agent's input with a native HTTP request to
-`/prepare-prompt` on the existing MCP adapter. The fixed server-side code in
-`files/ao/prepare_agent_prompt.py` serializes handoffs as compact JSON,
-unwraps loop result envelopes, and checks the final character count. Review and
-assessment prompts receive structured handoffs rather than duplicated raw tool
-traces. Full collector, reviewer, assessor, and loop outputs still go unchanged
-to the read-only AAP evidence validator; the writer's independent provenance gate
-also remains in place. Response schemas and publication conditions are unchanged.
-
-Preparation does not execute event/repository text, summarize with another model,
-or truncate evidence, file content, or blockers. If the compact prompt exceeds
-10,000 characters, preparation puts the complete numbered contexts into the
-existing MCP adapter's bounded, ephemeral handoff store. The agent receives the
-original instructions plus an opaque packet ID and must call `read_handoff` to
-load every context section before reasoning. AO supports larger tool results;
-this keeps the initial invocation inside its separate API limit. One retrieval
-counts toward the existing four-call budget. All model steps can retrieve their
-packet; collectors retain their original diagnostic tools and non-collector
-reporters receive only this context-reading tool.
-
-A packet read transports upstream claims; it is excluded from independently
-verified evidence. Original host/repository traces still establish facts. The
-adapter is required for overflow handling even if the optional AO source patch
-is installed. Oversized static instructions, packet storage errors or packets
-over 256 KiB stop preparation rather than silently removing facts. Output
-mapping retains the complete HTTP result, including failure status/body, rather
-than looking up fields inside an absent script `stdout_json` object.
-
-This also avoids the installed AO script runner's 32 KiB limit per environment
-value: the failed loop supplied about 55 KiB in one value. Native HTTP transports
-that JSON directly without a subprocess environment. CasC adds only the existing
-adapter hostname to `spec.workflowHttpRequestAllowedHosts`, preserving other
-hosts and waiting for the operator-managed worker rollout. No AO source or image
-change is required. The request endpoint runs fixed JSON preparation code and
-does not execute text sent by workflows.
-The isolated review replay completed with an 8,412-character prompt and returned
-two focused follow-up checks. Collector prompts request short exact excerpts while keeping full tool results
-in the original trace. Large file plans and verbose follow-up results use packet retrieval rather than
-being truncated to fit the initial API prompt. Packets are transient: rerun input
-preparation if the adapter restarted or the packet expired.
+CasC preserves the operator's native HTTP allowlist and adds the adapter hostname.
+The Linux MCP integration retains its dedicated non-secret placeholder bearer
+credential for the AO connection UI; it never receives the GitHub token.
+GitHub MCP keeps its separate credential. See
+[GitHub MCP compatibility](github-mcp-text-adapter.md) for the text adapter.
 
 ### Optional script-node configuration
 
@@ -384,58 +221,3 @@ Then run `ansible-playbook playbooks/casc.yml`. Other installations can leave
 `demo_ao_manage_script_nodes: false` (the default); HTTP preparation works with
 script execution disabled. `demo_ao_namespace` and `demo_ao_resource_name`
 identify the operator resource for configuring precise native HTTP access.
-
-## Reviewer checks, canonical citations, and publication authority
-
-The reviewer now distinguishes actionable checks from explicit access/authority
-limitations. `/review-checks` preserves all original findings and schedules a
-bounded attempt for any unanswered finding not explicitly marked unobtainable.
-It never treats a previous activity's spent four-call budget as a reason to skip
-the next activity. There are still at most four follow-up checks and four tool
-calls per activity, including packet retrieval. More findings remain blocking.
-Unknown historical provenance is not automatically a prerequisite to a separately
-justified policy decision; the reviewer should distinguish decision-critical gaps
-from limitations rather than requesting open-ended forensic proof.
-
-After the final agent, `/prepare-assessment` binds unchanged collector evidence
-IDs/tools/excerpts to unique successful runtime sources. This can correct a
-rewritten path or enrich a host-only source with its actual read path. It cannot
-repair invented excerpts, invent tool calls, resolve findings, or promote a
-rejected verdict. Unverified, ambiguous, or conflicting evidence remains blocked.
-It records canonicalized IDs and its validation result separately from the report.
-The AAP validator and writer independently repeat the checks before publication.
-
-Exact MCP text matching decodes top-level arrays of strings or text blocks,
-without joining blocks, changing whitespace, fuzzy matching, or searching nontext
-metadata. Evidence must still belong to the target host or pinned repository.
-Reviewer resolutions must quote original findings exactly and reference verified
-evidence IDs. A nonempty blocker list cannot become a confirmed/ready assessment.
-`verified_evidence_ids` now lists individually supported items even when `valid`
-is false; it does not override the publication gate.
-
-A proposed policy edit also needs `policy_basis`: `status`, `origin`, the exact
-`requirement`, and supporting `evidence_ids`. Request authority is established by
-a `policy_requirement` field or a named line in the original issue/event text:
-
-```text
-Policy requirement: Set net.core.somaxconn to 65535 for the web_servers group.
-```
-
-For a mock event, the equivalent explicit field is:
-
-```json
-"policy_requirement": "Set net.core.somaxconn to 65535 for the web_servers group."
-```
-
-Use this only if it is the intended policy. The generic comparison event asks to
-investigate a discrepancy; it does not establish that the observed runtime value
-should become desired policy. A separately verified repository requirement can
-also establish authority, but a commented configuration example cannot. With no
-established requirement, an edit is blocked; reconciliation of an already declared
-policy may instead justify a verified `no_change` outcome.
-
-The switch uses AO's supported `case_0` (ready), `case_1` (no change), and `default`
-(blocked) ports. The installed visual editor strips custom port names on save.
-Tests exercise the actual frontend conversion functions so all three branches
-survive an editor round-trip. `default` in the routing result means the blocked
-branch; it is not permission to publish.

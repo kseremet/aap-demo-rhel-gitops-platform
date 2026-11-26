@@ -11,6 +11,7 @@ from handoff_packets import HANDOFF_TOOL, PacketStore
 from prepare_agent_prompt import prepare_prompt
 from review_checks import prepare_review
 from ao_evidence import normalize_assessment
+from harness_case import prepare_case, compile_proposal, terminal_result
 import http.client
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -235,6 +236,7 @@ class AdapterHandler(BaseHTTPRequestHandler):
             "/prepare-prompt",
             "/review-checks",
             "/prepare-assessment",
+            "/harness",
         ):
             # Internal, bounded JSON storage only. No bearer or host credential
             # is needed or forwarded; the returned random ID grants read access.
@@ -253,7 +255,18 @@ class AdapterHandler(BaseHTTPRequestHandler):
                 data = json.loads(self.rfile.read(length))
                 if not isinstance(data, dict):
                     raise ValueError("Handoff request must be an object")
-                if self.path == "/prepare-assessment":
+                if self.path == "/harness":
+                    operation = data.pop("operation", None)
+                    if operation == "case":
+                        output = prepare_case(**data)
+                    elif operation == "proposal":
+                        output = compile_proposal(**data)
+                    elif operation == "result":
+                        output = terminal_result(**data)
+                    else:
+                        raise ValueError("Unsupported harness operation")
+                    self.send_json(200, output)
+                elif self.path == "/prepare-assessment":
                     if set(data) != {"report", "packet", "review", "repository_url"}:
                         raise ValueError(
                             "Assessment preparation requires report, packet, review and repository_url"

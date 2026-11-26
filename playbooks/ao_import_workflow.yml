@@ -25,6 +25,9 @@
   ansible.builtin.set_fact:
     _ao_workflow_definition: >-
       {{ (_ao_workflow_definition | to_json
+          | replace('__AO_HARNESS_URL__',
+                    (ao_github_text_adapter_url | default('http://github-mcp-server:8083/mcp'))
+                    | regex_replace('/mcp$', '/harness'))
           | replace('__AO_PREPARE_ASSESSMENT_URL__',
                     (ao_github_text_adapter_url | default('http://github-mcp-server:8083/mcp'))
                     | regex_replace('/mcp$', '/prepare-assessment'))

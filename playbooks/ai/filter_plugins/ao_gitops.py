@@ -293,7 +293,7 @@ def consumed_variables(response):
     return sorted(names)
 
 
-def validate_file(item, response, allowed_variables):
+def validate_file(item, response, allowed_variables, report=None, packet=None):
     """Compare the actual pinned GitHub blob with the proposed replacement."""
     status = response.get("status")
     data = response.get("json", {})
@@ -349,6 +349,15 @@ def validate_file(item, response, allowed_variables):
         and all(same(actual[k], declared[k]) for k in actual),
         "Actual YAML changes differ from the reviewed setting_changes; unrelated edits are rejected",
     )
+    # A storage proposal is still only a PR, but it must not suggest shrinking
+    # or resizing an LV other than the one whose backing capacity was measured.
+    for path in actual:
+        if path[0].startswith("storage_"):
+            require(
+                path[-1] == "size",
+                "Only measured LV size growth is supported for automatic storage proposals",
+            )
+            validate_storage_edit(item, path, new, report, packet)
     # Preserve comments as well as settings; do not accept a rewritten document.
     comments = lambda value: Counter(
         line.strip() for line in value.splitlines() if line.lstrip().startswith("#")
@@ -365,13 +374,127 @@ def validate_file(item, response, allowed_variables):
     }
 
 
+def validate_storage_edit(item, path, proposed, report, packet):
+    from decimal import Decimal
+
+    require(
+        isinstance(report, dict) and isinstance(packet, dict),
+        "Storage size edits require the verified capacity report and source packet",
+    )
+    capacity = report.get("capacity_assessment") or {}
+    require(
+        isinstance(capacity, dict)
+        and report.get("proposal_basis", {}).get("kind") == "capacity_change",
+        "Storage size edits require a capacity_change proposal",
+    )
+    require(
+        item["path"].startswith("host_vars/" + report["target_host"] + "/"),
+        "Storage growth requires target-host scope; one host's capacity cannot authorize fleet-wide resizing",
+    )
+    values = {}
+    groups = packet.get("inventory_groups") or []
+    for source, wrapper in packet.items():
+        if not isinstance(source, str) or not isinstance(wrapper, dict):
+            continue
+        eligible = (
+            source.startswith("group_vars/all/")
+            or source.startswith("host_vars/" + report["target_host"] + "/")
+            or any(source.startswith("group_vars/" + group + "/") for group in groups)
+        )
+        if not eligible or source == item["path"]:
+            continue
+        steps = wrapper.get("result", {}).get("agent_trace", {}).get("steps", [])
+        for step in steps:
+            args = step.get("tool_input", {})
+            if step.get("type") == "tool_call":
+                context = report["repository_context"]
+                require(
+                    args.get("owner") == context["owner"]
+                    and args.get("repo") == context["repository"]
+                    and args.get("sha") == context["read_commit"],
+                    "Storage declaration is not pinned to the reviewed repository",
+                )
+            if step.get("type") == "tool_result" and step.get("status") == "success":
+                parsed = (
+                    load_variables(step["tool_output"])
+                    if yaml.safe_load(step["tool_output"]) is not None
+                    else {}
+                )
+                for key, value in parsed.items():
+                    if key.startswith("storage_"):
+                        require(
+                            key not in values or same(values[key], value),
+                            "Ambiguous storage declarations require explicit precedence evidence",
+                        )
+                        values[key] = value
+    values.update(proposed)
+
+    def merge(left, right):
+        result = deepcopy(left)
+        for key, value in right.items():
+            result[key] = (
+                merge(result[key], value)
+                if key in result
+                and isinstance(result[key], dict)
+                and isinstance(value, dict)
+                else deepcopy(value)
+            )
+        return result
+
+    require(
+        path[0] == "storage_host_pools" and len(path) == 5 and path[2] == "volumes",
+        "Storage growth must use the existing target-host storage merge contract",
+    )
+    effective = merge(
+        merge(
+            values.get("storage_baseline_pools", {}),
+            values.get("storage_group_pools", {}),
+        ),
+        values.get("storage_host_pools", {}),
+    )
+    try:
+        pool = effective[path[1]]
+        volume = pool["volumes"][path[3]]
+    except (KeyError, TypeError):
+        require(
+            False, "Proposed storage path does not identify an existing managed volume"
+        )
+    require(
+        pool.get("name") == capacity.get("volume_group")
+        and volume.get("name") == capacity.get("logical_volume")
+        and volume.get("mount_point") == capacity.get("mount_point"),
+        "Proposed variable path does not identify the measured LV/VG/mount",
+    )
+    match = re.fullmatch(
+        r"([0-9]+(?:\.[0-9]+)?)\s*([kmgtpe]?)(?:i?b)?",
+        str(volume["size"]).strip().lower(),
+    )
+    require(
+        match,
+        "Storage size must be explicit; percentage-based changes are not supported",
+    )
+    size = int(
+        Decimal(match[1]) * (1024 ** ("kmgtpe".index(match[2]) + 1) if match[2] else 1)
+    )
+    require(
+        size == capacity.get("proposed_size_bytes"),
+        "Planned storage size differs from the verified capacity assessment",
+    )
+
+
 def render_report(report, plan, review, execution):
     lines = [
         "<!-- aiops-agent-review -->",
+        "<!-- ao-context "
+        + json.dumps({"target_host": report["target_host"]}, separators=(",", ":"))
+        + " -->",
         "## Incident",
         report["incident"],
         "## Diagnosis",
         report["root_cause"],
+        "## Proposal for Maintainer Review",
+        (report.get("proposal_basis") or {}).get("rationale", report["recommendation"]),
+        "The proposed future state is a recommendation, not an already approved policy. Human review and merge remain required.",
         "## Evidence",
     ]
     for item in report["evidence"]:

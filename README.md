@@ -236,12 +236,13 @@ Each job run can therefore open a separate PR even when the planner repeats
 `aiops/incident-remediation`. Plans with `operation: update_pr` retain the
 existing PR branch so maintainer feedback updates that PR.
 
-AO workflows now separate request scoping, host evidence, repository mapping,
-causal analysis, evidence review, and edit review. A bounded loop collects up to
-four reviewer-requested observations before the final assessment. Switches route
-no-change and blocked cases to reports; only independently approved plans reach
-AAP. Each agent returns a self-contained structured evidence packet.
-
+AO uses three agents: investigate, propose, and independently review. A read-only
+AAP foundation collects pinned repository baselines and target facts before
+reasoning. Immutable evidence IDs prevent copied or invented citations. Verified
+observed values may be proposed for human review without pre-approved policy;
+configuration, service, and capacity events share the same harness. LV growth
+requires measured resource identity and backing headroom. Only independently
+approved, evidence-validated plans reach the writer.
 The AAP writer pins the inspected revision, preflights every variable file, and
 checks exact YAML setting changes before publishing all edits as one commit.
 It renders the full incident report, evidence, scope, alternatives, limitations,

@@ -32,8 +32,17 @@ Tracks testing progress for this demo. For procedural verification steps, see [s
 
 | Component | Status | Last tested | Notes |
 |---|---|---|---|
-| AO incident investigation (`rhel-gitops-incident.yaml`) | Partial | 2026-11-26 | Added request scoping, repository mapping, independent evidence review, bounded targeted-diagnostic loop, final assessment, independent plan review, and explicit no-write branches. Importer substitutions, AO schemas, and routing checks using AO expression resolution passed. Deployed AO API validation passed with zero findings. Isolated GitHub and Linux tool calls succeeded after repairing stale SSH aliases; full incident-to-PR validation remains pending. |
+| AO incident investigation (`rhel-gitops-incident.yaml`) | Partial | 2026-11-26 | Three agents investigate, propose and independently review, preceded by deterministic read-only collection; explicit no-write branches remain. Importer substitutions, AO schemas, and routing checks using AO expression resolution passed. Deployed AO API validation passed with zero findings. Isolated GitHub and Linux tool calls succeeded after repairing stale SSH aliases; full incident-to-PR validation remains pending. |
 | AO PR review (`rhel-gitops-pr-review.yaml`) | Partial | 2026-11-26 | Uses the same evidence/review harness while preserving PR identity and distinguishing revision requests from questions/approval. Importer substitutions, AO schemas, and routing checks passed. Explicit read-only tools, runtime evidence validation, and blocker gates added. Deployed AO API validation passed; live maintainer-feedback validation remains pending. |
+
+## Current harness validation
+
+The three-agent simplification, observed-value proposals, read-only collection,
+and measured LV growth guards passed the local regression suite. Focused Ansible
+lint and deployed AO API validation passed with zero workflow findings. The
+updated adapter helper deployed successfully. Isolated collection validation
+is recorded below when completed.
+Full incident-to-PR and maintainer-feedback tests remain pending; status is Partial.
 
 ## Latest local validation
 

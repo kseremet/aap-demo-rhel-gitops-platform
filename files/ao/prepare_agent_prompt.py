@@ -60,7 +60,7 @@ def prepare_prompt(template, contexts, stage, store=None):
             f"Before analysis, call read_handoff with packet_id={packet_id} to "
             "load ALL numbered context sections. Its SHA-256 is "
             + packet["sha256"]
-            + ". This read is one of the four allowed tool calls. Preserve the "
+            + ". This read counts within this activity's stated tool-call budget. Preserve the "
             "packet's exact evidence and blockers; do not infer missing context.\n\n"
             + re.sub(
                 r"@@HANDOFF_(\d+)@@",

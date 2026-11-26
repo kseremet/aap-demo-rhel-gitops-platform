@@ -10,7 +10,7 @@ spec:
   template:
     metadata:
       annotations:
-        aap-workbench.github-mcp-text/source-sha256: "{{ (lookup('ansible.builtin.file', ao_github_text_source_file, rstrip=false) ~ lookup('ansible.builtin.file', ao_github_text_source_file | dirname ~ '/handoff_packets.py', rstrip=false) ~ lookup('ansible.builtin.file', ao_github_text_source_file | dirname ~ '/prepare_agent_prompt.py', rstrip=false) ~ lookup('ansible.builtin.file', ao_github_text_source_file | dirname ~ '/review_checks.py', rstrip=false) ~ lookup('ansible.builtin.file', ao_github_text_source_file | dirname ~ '/../../playbooks/ai/filter_plugins/ao_evidence.py', rstrip=false)) | hash('sha256') }}"
+        aap-workbench.github-mcp-text/source-sha256: "{{ (lookup('ansible.builtin.file', ao_github_text_source_file, rstrip=false) ~ lookup('ansible.builtin.file', ao_github_text_source_file | dirname ~ '/handoff_packets.py', rstrip=false) ~ lookup('ansible.builtin.file', ao_github_text_source_file | dirname ~ '/prepare_agent_prompt.py', rstrip=false) ~ lookup('ansible.builtin.file', ao_github_text_source_file | dirname ~ '/review_checks.py', rstrip=false) ~ lookup('ansible.builtin.file', ao_github_text_source_file | dirname ~ '/harness_case.py', rstrip=false) ~ lookup('ansible.builtin.file', ao_github_text_source_file | dirname ~ '/../../playbooks/ai/filter_plugins/ao_evidence.py', rstrip=false)) | hash('sha256') }}"
     spec:
       containers:
         # Pin the digest already running, avoiding an incidental latest-tag

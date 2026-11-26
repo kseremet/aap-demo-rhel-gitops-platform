@@ -222,6 +222,19 @@ controller_templates:
       aap_validate_certs: "{{ aap_validate_certs }}"
     credentials:
       - Automation Orchestrator Service Account
+  - name: JT - AO Collect Evidence
+    description: Read pinned repository declarations and target identity, filesystem, device and LVM facts without configuration changes.
+    organization: "{{ demo_organization_name }}"
+    job_type: run
+    inventory: "{{ demo_inventory_name }}"
+    project: "{{ demo_platform_project_name }}"
+    playbook: playbooks/ai/collect_ao_evidence.yml
+    ask_variables_on_launch: true
+    extra_vars:
+      demo_state_scm_url: "{{ demo_state_scm_url }}"
+    credentials:
+      - "{{ demo_machine_credential_name }}"
+      - GitHub API Access
   - name: JT - AO Evidence Validation
     description: Validate diagnostic claims against successful AO runtime tool results without writes.
     organization: "{{ demo_organization_name }}"
