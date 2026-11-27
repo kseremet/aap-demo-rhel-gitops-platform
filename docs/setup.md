@@ -173,8 +173,10 @@ This configures the CrewAI job templates and the GitHub EDA activation, deploys
 the internal Phoenix dashboard, then deploys both CrewAI scripts from the role
 templates to the existing AI VM.
 Script deployment validates Python syntax and imports, keeps remote backups,
-and preserves CrewAI/OpenAI versions, `.env`, state checkout and selected MCP
-backend. Initial runtime provisioning remains in `04_configure_ai_vm.yml`.
+and preserves CrewAI/OpenAI versions, credentials, state checkout and selected MCP
+backend. It reconciles only `AI_LLM_MODEL` in the VM's `.env` with the shared
+`demo_ai_llm_model` setting, currently `gpt-6-luna`. Initial runtime provisioning
+remains in `04_configure_ai_vm.yml`.
 Managed AAP host addresses, including
 `ai-01`, and existing Linux MCP SSH aliases are refreshed from live VMIs without
 rewriting generated local files. The activation is briefly disabled for updates

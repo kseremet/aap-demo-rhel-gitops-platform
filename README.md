@@ -234,7 +234,9 @@ that file before use. `playbooks/casc.yml` configures Controller and EDA, then
 updates both agent scripts from the same templates used by initial setup.
 It also provisions an internal Phoenix tracing dashboard and installs the pinned
 instrumentation into the VM's existing Python environment. CrewAI/OpenAI versions,
-`.env`, and the state checkout are preserved. See [watching execution in Phoenix](docs/setup.md#watch-crewai-execution-in-phoenix).
+credentials, other `.env` settings, and the state checkout are preserved. CasC
+reconciles the VM model with `demo_ai_llm_model`, also used by both EE JTs
+(default `gpt-6-luna`). See [watching execution in Phoenix](docs/setup.md#watch-crewai-execution-in-phoenix).
 
 CasC refreshes managed Controller and existing Linux MCP SSH addresses from live
 VMIs in memory. It preserves generated local inventory files and the MCP policy
