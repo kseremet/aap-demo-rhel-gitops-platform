@@ -163,99 +163,24 @@ When the rulebook changes, sync the `RHEL GitOps EDA` project in the EDA UI
 before applying CasC again. CasC does not force a project sync on every run, so
 it will not race with an in-progress manual sync.
 
-## Automation Orchestrator backend
-
-The default event-processing backend is Automation Orchestrator. Before
-applying CasC, configure these values in `group_vars/all/demo_variables.yml`:
-
-```yaml
-demo_ai_backend: automation_orchestrator
-demo_ao_url: https://automation-orchestrator.example.com
-demo_ao_incident_eda_trigger_path: your-incident-trigger-path
-demo_ao_pr_review_eda_trigger_path: your-pr-review-trigger-path
-```
-
-Store the local admin password in encrypted `vault.yml`:
-
-```yaml
-vault_ao_admin_password: CHANGE_ME
-vault_ao_mcp_bearer_token: demo-mcp-token
-```
-
-Run the AO-specific CasC playbook:
+## Apply Controller and EDA configuration
 
 ```bash
-ansible-playbook playbooks/ao_config.yml --vault-id @prompt
+ansible-playbook playbooks/casc.yml --vault-id @prompt
 ```
 
-It creates or reuses the `rhel-gitops-agentic-workflows` project and imports or
-updates both workflow definitions. The EDA rulebook forwards GitHub issue and
-pull-request events to the corresponding unauthenticated AO EDA trigger through
-`JT - AO Event Bridge`. The existing CrewAI jobs remain available; set
-`demo_ai_backend: crewai` to route events back to the AI VM implementation.
+This configures the CrewAI job templates and the GitHub EDA activation. It does
+not reinstall the working AI VM runtime. Managed AAP host addresses, including
+`ai-01`, and existing Linux MCP SSH aliases are refreshed from live VMIs without
+rewriting generated local files. The activation is briefly disabled for updates
+and enabled after configuration; review webhook deliveries during maintenance
+for any events that need redelivery.
 
-The AO playbook also creates project-scoped AAP, LLM, and Linux MCP integrations,
-their management credentials, assigns them to the AO project, validates them,
-and refreshes discovered models/tools before importing workflows. AO must allow
-the MCP hostname through its integration URL allowlist when the MCP Service is
-an internal OpenShift address. The demo MCP policy ignores the bearer value, but
-the project-scoped credential makes the MCP execution binding explicit in the AO
-agentic steps.
-
-For the default internal MCP URL, configure the AO deployment with an allowlist
-such as:
-
-```text
-APP_INTEGRATION_URL_ALLOWED_HOSTS=["linux-mcp-server"]
-```
-
-Use the exact hostname from `demo_ao_mcp_url`; for a cross-namespace Service DNS
-name, allowlist that full hostname instead. Restart AO after changing the
-setting, then rerun `playbooks/ao_config.yml`.
-
-Import these workflow definitions into Automation Orchestrator:
-
-- `workflows/automation-orchestrator/rhel-gitops-incident.yaml`
-- `workflows/automation-orchestrator/rhel-gitops-pr-review.yaml`
-
-Combined CasC supplies the EDA paths, discovered model/tool IDs, integration
-credentials, and native HTTP helper URLs automatically. It also configures
-**JT - AO Collect Evidence** with the fleet inventory, SSH machine credential,
-and GitHub API Access. **JT - AO Prepare Proposal** computes exact YAML deltas
-without host or GitHub credentials before independent review. The platform project must sync the pushed revision before
-AAP creates that template. The same verified VMI discovery refreshes both MCP
-aliases and AAP fleet addresses, preserving local generated files. Publish both
-updated AO drafts before testing. See the [three-agent harness](ao-harness.md)
-for generic drift/capacity mock events and the strict publication gates.
-
-The CasC playbook checks for the existing `GitHub AI Incident Issues`
-activation and disables it before applying updates. This handles EDA's
-requirement that stopped activations be disabled before they can be updated.
-
-## AO handoff preparation access
-
-The harness uses native HTTP requests to the existing MCP adapter for bounded
-JSON preparation, with MCP retrieval for oversized context packets. Combined
-CasC preserves the AO operator's existing HTTP allowlist and adds only the
-adapter hostname. It waits for the operator-managed worker rollout. Configure
-`demo_ao_namespace` and `demo_ao_resource_name` if their defaults differ.
-Script nodes are no longer required; the earlier approved setting can be disabled
-using the [optional configuration procedure](ao-harness.md#optional-script-node-configuration).
-
-## GitHub MCP compatibility on the existing AO version
-
-The installed AO MCP adapter cannot checkpoint embedded GitHub file resources.
-Combined CasC configures a standard-library Python sidecar on the existing GitHub
-MCP Deployment and points the GitHub integration at its extra Service port.
-No AO source or image change is required. The existing GitHub MCP Deployment and
-Service must be present; their names are configurable in demo variables.
-
-See [the adapter setup, Controller jobs, verification, and rollback guide](github-mcp-text-adapter.md).
-The standalone setup is `playbooks/setup/05_configure_github_mcp_text_adapter.yml`;
-its teardown is `playbooks/cleanup/04_remove_github_mcp_text_adapter.yml`.
-Both are also exposed as AAP maintenance job templates. Kubernetes access uses
-the existing OpenShift API/token settings, or Controller's native Kubernetes
-bearer credential. The original GitHub MCP port and credential remain available.
+Verify the `AI Control` inventory contains the current `ai-01` address and both
+CrewAI job templates use that inventory and the machine credential. Check agent
+imports, authenticated read-only GitHub access, the configured model, and Linux
+MCP tool discovery before a controlled incident-to-PR test. Maintainer feedback
+must update that same PR; marked agent comments must not retrigger the rulebook.
 
 ## PR review feedback loop
 

@@ -187,7 +187,6 @@ After CasC is applied, the following AAP job templates are available:
 | JT - RHEL GitOps Provision VMs | `playbooks/setup/02_provision_vms.yml` | Create KubeVirt VMs |
 | JT - RHEL GitOps Discover Inventory | `playbooks/setup/03_discover_inventory.yml` | Populate inventory from VMI facts |
 | JT - RHEL GitOps Cleanup | `playbooks/cleanup.yml` | Full lab teardown |
-| JT - AO Event Bridge | `playbooks/ai/forward_event_to_ao.yml` | Forward EDA events to Automation Orchestrator |
 
 ## Troubleshooting
 
@@ -223,51 +222,17 @@ to the VM-local server. The service uses an OpenShift Secret for its SSH key and
 `oc logs`. No MCP server is installed on the fleet nodes. CrewAI settings are
 read from `/home/cloud-user/agentic-aiops/.env`.
 
-GitHub incident and PR events use Automation Orchestrator by default. Set
-`demo_ai_backend: crewai` to keep the existing AI VM workflow as a fallback.
-CasC creates `JT - AO Event Bridge`, which forwards filtered EDA events to the
-Automation Orchestrator EDA trigger. Run `playbooks/ao_config.yml` with the AO
-URL and local admin password to create the demo AO project and import the
-version-controlled workflows.
+GitHub issue events launch `JT - AI Incident Investigation` through EDA. Maintainer
+feedback launches `JT - AI PR Review`, which revises the same PR. Both jobs run
+the existing CrewAI scripts on `ai-01`; the agents use Linux MCP for read-only
+host diagnostics and the GitHub API for proposals. Human review and merge remain
+required before GitOps reconciliation applies desired state.
 
-For AO plans with `operation: create_pr`, `JT - AO GitOps Action` appends a
-random suffix to the proposed branch name and creates it from the base branch.
-Each job run can therefore open a separate PR even when the planner repeats
-`aiops/incident-remediation`. Plans with `operation: update_pr` retain the
-existing PR branch so maintainer feedback updates that PR.
+Set `demo_ai_llm_provider`, `demo_ai_llm_model`, and `demo_ai_llm_base_url` in
+`group_vars/all/demo_variables.yml`. Keep credentials in `vault.yml` and encrypt
+that file before use. `playbooks/casc.yml` configures Controller and EDA without
+reinstalling the VM's Python environment or agent scripts.
 
-AO uses three agents: investigate, propose, and independently review. A read-only
-AAP foundation collects pinned repository baselines and target facts before
-reasoning. Immutable evidence IDs prevent copied or invented citations. Verified
-observed values may be proposed for human review without pre-approved policy;
-configuration, service, and capacity events share the same harness. LV growth
-requires measured resource identity and backing headroom. Only independently
-approved, evidence-validated plans reach the writer.
-The AAP writer pins the inspected revision, preflights every variable file, and
-checks exact YAML setting changes before publishing all edits as one commit.
-It renders the full incident report, evidence, scope, alternatives, limitations,
-and pending validation into the PR. PR revisions refresh the body and add an
-EDA-marked summary comment. See [AO investigation harness](docs/ao-harness.md)
-for the flow, supported edit contract, offline checks, and live-test procedure.
-
-Set `demo_ai_llm_provider` and `demo_ai_llm_base_url` in
-`group_vars/all/demo_variables.yml`. `demo_ai_llm_model` selects the CrewAI
-model; `demo_ao_llm_model` independently selects the model for both AO workflows.
-AO defaults to `gpt-4.1` for Chat Completions with tool calling. CasC requires
-that exact model in the integration's discovered catalog and does not fall back
-to a provider default. This is a temporary compatibility choice: OpenAI lists
-[GPT-4.1 retirement on January 14, 2027](https://developers.openai.com/api/docs/deprecations).
-Use a newer model after validating AO's API/tool compatibility. Set
-`vault_ai_llm_api_key` in `vault.yml` and encrypt that file before use.
-
-Apply these AO and AAP changes together with `playbooks/casc.yml`, which imports
-the workflows and resolves the configured model before configuring AAP. Static
-validation does not update the deployed workflows or model selection.
-
-The current AO release can use embedded GitHub file contents through the
-[GitHub MCP text compatibility sidecar](docs/github-mcp-text-adapter.md), enabled
-by combined CasC. It leaves the installed AO source and image unchanged.
-
-The harness prepares compact handoffs over native HTTP to the existing adapter
-and retrieves oversized contexts through MCP. Script-node execution is optional;
-see [handoff transport and configuration](docs/ao-harness.md#compact-handoffs-and-the-invocation-api-limit).
+CasC refreshes managed Controller and existing Linux MCP SSH addresses from live
+VMIs in memory. It preserves generated local inventory files and the MCP policy
+and SSH identity. See [setup and verification](docs/setup.md).

@@ -1,9 +1,11 @@
 # Description: Configure AAP objects for the platform and GitOps repositories.
 ---
-- name: Configure RHEL GitOps AAP objects
+- name: Configure RHEL GitOps AAP objects # noqa: fqcn[keyword] - explicit collections policy
   hosts: localhost
   connection: local
   gather_facts: false
+  collections: [ansible.builtin, ansible.eda, kubernetes.core, kubevirt.core, infra.aap_configuration]
+  tags: [aap]
   vars_files:
     - ../vault.yml
     - ../group_vars/all/demo_variables.yml
@@ -28,41 +30,15 @@
             (vault_demo_ssh_private_key is defined
              and vault_demo_ssh_private_key not in ['', 'CHANGE_ME'])
             or (demo_ssh_private_key_path is file)
-          - demo_ai_backend in ['automation_orchestrator', 'crewai']
-          - >-
-            demo_ai_backend != 'automation_orchestrator'
-            or (
-              demo_ao_url is defined
-              and demo_ao_url not in ['', 'CHANGE_ME_AUTOMATION_ORCHESTRATOR_URL']
-            )
-          - >-
-            demo_ai_backend != 'automation_orchestrator'
-            or (ao_eda_client_id is defined and ao_eda_client_secret is defined)
+          - demo_ai_backend | default('crewai') == 'crewai'
         fail_msg: >-
-          Run VM discovery first and configure AAP, SCM, SSH key, and selected
-          AI backend values before applying CasC. For the AO backend, run
-          playbooks/casc.yml so the AO service-account credential is available
-          to the AAP Event Bridge configuration.
+          Run VM discovery first and configure AAP, SCM, SSH key and CrewAI
+          settings before applying CasC. demo_ai_backend must be crewai.
 
-    # AO already reads live VMIs to refresh MCP aliases. Reuse those addresses
-    # for Controller's SSH inventory too, without rewriting local discovery files.
-    # Otherwise the read-only collector can target an old pod-network address.
-    - name: Keep AAP fleet addresses aligned with the verified MCP targets
-      ansible.builtin.set_fact:
-        controller_hosts: >-
-          {{ (controller_hosts | rejectattr('name', 'equalto', item.item.key) | list)
-             + [_configured | combine({'variables': {'ansible_host': _address}}, recursive=True)] }}
-      vars:
-        _matches: "{{ controller_hosts | selectattr('name', 'equalto', item.item.key) | list }}"
-        _configured: "{{ _matches | first }}"
-        _address: >-
-          {{ item.resources[0].status.interfaces | selectattr('name', 'equalto', 'default')
-             | map(attribute='ipAddress') | first }}
-      loop: "{{ _ao_mcp_vmis.results | default([]) }}"
-      loop_control:
-        label: "{{ item.item.key }}"
-      when: _matches | length == 1
-      no_log: true
+    # Resolve live pod-network addresses in memory, including the AI control VM.
+    # Local generated files and the VM's installed CrewAI runtime stay untouched.
+    - name: Refresh managed inventory and existing MCP addresses
+      ansible.builtin.include_tasks: refresh_inventory_addresses.yml
 
     - name: Set AAP authentication variables
       ansible.builtin.set_fact:

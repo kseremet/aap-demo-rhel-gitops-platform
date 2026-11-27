@@ -15,67 +15,6 @@ controller_credentials:
               and vault_demo_ssh_private_key not in ['', 'CHANGE_ME']
            else lookup('ansible.builtin.file', demo_ssh_private_key_path) }}
     no_log: true
-  - name: GitHub API Access
-    description: GitHub token used by the Automation Orchestrator GitOps action job.
-    organization: "{{ demo_organization_name }}"
-    credential_type: GitHub API Token
-    inputs:
-      github_token: "{{ vault_github_token }}"
-    no_log: true
-  - name: Automation Orchestrator Service Account
-    description: Client credentials used by EDA to trigger AO workflows.
-    organization: "{{ demo_organization_name }}"
-    credential_type: Automation Orchestrator Service Account
-    inputs:
-      client_id: "{{ ao_eda_client_id }}"
-      client_secret: "{{ ao_eda_client_secret }}"
-    no_log: true
-  # Native credential injection keeps the cluster bearer token out of JT vars.
-  - name: RHEL GitOps MCP Kubernetes
-    description: Cluster credential for configuring the GitHub MCP compatibility sidecar.
-    organization: "{{ demo_organization_name }}"
-    credential_type: OpenShift or Kubernetes API Bearer Token
-    inputs:
-      host: "{{ openshift_api_url }}"
-      bearer_token: "{{ vault_openshift_token }}"
-      verify_ssl: "{{ openshift_validate_certs }}"
-    no_log: true
-controller_credential_types:
-  - name: GitHub API Token
-    description: Token injected into GitHub API action jobs.
-    kind: cloud
-    inputs:
-      fields:
-        - id: github_token
-          type: string
-          label: GitHub API token
-          secret: true
-      required:
-        - github_token
-    injectors:
-      extra_vars:
-        github_api_token: "{{ '{{ github_token }}' }}"
-  - name: Automation Orchestrator Service Account
-    description: Client credentials used by EDA to trigger AO workflows.
-    kind: cloud
-    inputs:
-      fields:
-        - id: client_id
-          type: string
-          label: AO client ID
-          secret: false
-        - id: client_secret
-          type: string
-          label: AO client secret
-          secret: true
-      required:
-        - client_id
-        - client_secret
-    injectors:
-      extra_vars:
-        ao_webhook_client_id: "{{ '{{ client_id }}' }}"
-        ao_webhook_client_secret: "{{ '{{ client_secret }}' }}"
-
 controller_inventories:
   - name: "{{ demo_inventory_name }}"
     organization: "{{ demo_organization_name }}"
@@ -105,46 +44,6 @@ controller_projects:
     wait: true
 
 controller_templates:
-  - name: JT - GitHub MCP Text Adapter Setup
-    description: Set up the GitHub MCP text compatibility sidecar without changing AO.
-    organization: "{{ demo_organization_name }}"
-    job_type: run
-    inventory: "{{ demo_inventory_name }}"
-    project: "{{ demo_platform_project_name }}"
-    playbook: playbooks/setup/05_configure_github_mcp_text_adapter.yml
-    credentials: [RHEL GitOps MCP Kubernetes]
-    execution_environment: "{{ demo_mcp_setup_execution_environment | default(omit, true) }}"
-    ask_variables_on_launch: true
-    extra_vars:
-      ansible_python_interpreter: "{{ '{{ ansible_playbook_python }}' }}"
-      openshift_vm_namespace: "{{ openshift_vm_namespace }}"
-      demo_ao_github_mcp_url: "{{ demo_ao_github_mcp_url }}"
-      demo_ao_github_text_adapter_enabled: "{{ demo_ao_github_text_adapter_enabled | default(true) | bool }}"
-      demo_ao_github_text_adapter_port: "{{ demo_ao_github_text_adapter_port | default(8083) | int }}"
-      demo_ao_github_text_adapter_image: "{{ demo_ao_github_text_adapter_image | default('registry.access.redhat.com/ubi9/python-312:latest') }}"
-      demo_ao_github_mcp_deployment_name: "{{ demo_ao_github_mcp_deployment_name | default('github-mcp-server') }}"
-      demo_ao_github_mcp_service_name: "{{ demo_ao_github_mcp_service_name | default('github-mcp-server') }}"
-      demo_ao_github_mcp_container_name: "{{ demo_ao_github_mcp_container_name | default('github-mcp-server') }}"
-  - name: JT - GitHub MCP Text Adapter Cleanup
-    description: Remove the GitHub MCP text compatibility sidecar without changing AO.
-    organization: "{{ demo_organization_name }}"
-    job_type: run
-    inventory: "{{ demo_inventory_name }}"
-    project: "{{ demo_platform_project_name }}"
-    playbook: playbooks/cleanup/04_remove_github_mcp_text_adapter.yml
-    credentials: [RHEL GitOps MCP Kubernetes]
-    execution_environment: "{{ demo_mcp_setup_execution_environment | default(omit, true) }}"
-    ask_variables_on_launch: true
-    extra_vars:
-      ansible_python_interpreter: "{{ '{{ ansible_playbook_python }}' }}"
-      openshift_vm_namespace: "{{ openshift_vm_namespace }}"
-      demo_ao_github_mcp_url: "{{ demo_ao_github_mcp_url }}"
-      demo_ao_github_text_adapter_enabled: "{{ demo_ao_github_text_adapter_enabled | default(true) | bool }}"
-      demo_ao_github_text_adapter_port: "{{ demo_ao_github_text_adapter_port | default(8083) | int }}"
-      demo_ao_github_text_adapter_image: "{{ demo_ao_github_text_adapter_image | default('registry.access.redhat.com/ubi9/python-312:latest') }}"
-      demo_ao_github_mcp_deployment_name: "{{ demo_ao_github_mcp_deployment_name | default('github-mcp-server') }}"
-      demo_ao_github_mcp_service_name: "{{ demo_ao_github_mcp_service_name | default('github-mcp-server') }}"
-      demo_ao_github_mcp_container_name: "{{ demo_ao_github_mcp_container_name | default('github-mcp-server') }}"
   - name: JT - RHEL GitOps Reconciliation
     organization: "{{ demo_organization_name }}"
     job_type: run
@@ -209,67 +108,6 @@ controller_templates:
     credentials:
       - "{{ demo_machine_credential_name }}"
     ask_variables_on_launch: true
-  - name: JT - AO Event Bridge
-    description: Forward an EDA event to an Automation Orchestrator EDA trigger.
-    organization: "{{ demo_organization_name }}"
-    job_type: run
-    inventory: "{{ demo_ai_inventory_name }}"
-    project: "{{ demo_platform_project_name }}"
-    playbook: playbooks/ai/forward_event_to_ao.yml
-    ask_variables_on_launch: true
-    extra_vars:
-      ao_webhook_base_url: "{{ demo_ao_url }}"
-      aap_validate_certs: "{{ aap_validate_certs }}"
-    credentials:
-      - Automation Orchestrator Service Account
-  - name: JT - AO Collect Evidence
-    description: Read pinned repository declarations and target identity, filesystem, device and LVM facts without configuration changes.
-    organization: "{{ demo_organization_name }}"
-    job_type: run
-    inventory: "{{ demo_inventory_name }}"
-    project: "{{ demo_platform_project_name }}"
-    playbook: playbooks/ai/collect_ao_evidence.yml
-    ask_variables_on_launch: true
-    extra_vars:
-      demo_state_scm_url: "{{ demo_state_scm_url }}"
-    credentials:
-      - "{{ demo_machine_credential_name }}"
-      - GitHub API Access
-  # Pure preparation parses full candidate files and computes exact leaf deltas
-  # before review. It has no host or GitHub credentials and cannot publish.
-  - name: JT - AO Prepare Proposal
-    description: Bind verified evidence and compute exact typed YAML deltas before independent review.
-    organization: "{{ demo_organization_name }}"
-    job_type: run
-    inventory: "{{ demo_ai_inventory_name }}"
-    project: "{{ demo_platform_project_name }}"
-    playbook: playbooks/ai/prepare_ao_proposal.yml
-    ask_variables_on_launch: true
-  - name: JT - AO Evidence Validation
-    description: Validate diagnostic claims against successful AO runtime tool results without writes.
-    organization: "{{ demo_organization_name }}"
-    job_type: run
-    inventory: "{{ demo_ai_inventory_name }}"
-    project: "{{ demo_platform_project_name }}"
-    playbook: playbooks/ai/validate_ao_evidence.yml
-    ask_variables_on_launch: true
-    extra_vars:
-      demo_state_scm_url: "{{ demo_state_scm_url }}"
-  - name: JT - AO GitOps Action
-    description: Create or update a GitHub pull request from an AO structured plan.
-    organization: "{{ demo_organization_name }}"
-    job_type: run
-    inventory: "{{ demo_ai_inventory_name }}"
-    project: "{{ demo_platform_project_name }}"
-    playbook: playbooks/ai/run_ao_gitops_action.yml
-    ask_variables_on_launch: true
-    # Resolve ignored local settings now; the writer also uses vars_files locally.
-    extra_vars:
-      demo_state_scm_url: "{{ demo_state_scm_url }}"
-      demo_ai_github_api_url: "{{ demo_ai_github_api_url }}"
-      demo_ai_pr_branch_prefix: "{{ demo_ai_pr_branch_prefix }}"
-    credentials:
-      - GitHub API Access
 
 eda_credentials:
   - name: "{{ demo_eda_controller_credential_name }}"
@@ -287,6 +125,8 @@ eda_credentials:
 eda_projects:
   - name: "{{ demo_eda_project_name }}"
     description: Rulebooks for the RHEL GitOps AI incident workflow.
+    # Refresh rulebook content before updating and re-enabling the activation.
+    sync: true
     url: "{{ demo_platform_scm_url }}"
     scm_branch: "{{ demo_platform_scm_branch }}"
     organization: "{{ demo_organization_name }}"
@@ -305,19 +145,6 @@ eda_rulebook_activations:
       github_webhook_secret: "{{ vault_github_webhook_secret }}"
       github_incident_label: "{{ demo_eda_incident_label }}"
       github_aap_organization: "{{ demo_organization_name }}"
-      ai_backend: "{{ demo_ai_backend }}"
-      ao_incident_webhook_path: "{{ demo_ao_incident_eda_trigger_path }}"
-      ao_pr_review_webhook_path: "{{ demo_ao_pr_review_eda_trigger_path }}"
     restart_policy: always
     enabled: true
     state: present
-
-# Configure the compatibility dependency before running the AO demo. Cleanup is
-# deliberately a separate confirmed operation, after switching AO to port 8082.
-controller_workflows:
-  - name: WF - GitHub MCP Text Adapter Setup
-    organization: "{{ demo_organization_name }}"
-    simplified_workflow_nodes:
-      - identifier: configure-github-mcp-text
-        unified_job_template: JT - GitHub MCP Text Adapter Setup
-        lookup_organization: "{{ demo_organization_name }}"

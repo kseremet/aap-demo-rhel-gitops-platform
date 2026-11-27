@@ -37,48 +37,8 @@ demo_ai_llm_base_url: https://api.openai.com/v1
 demo_ai_repo_path: /home/cloud-user/agentic-aiops/state-repo
 demo_ai_github_api_url: https://api.github.com
 demo_ai_pr_branch_prefix: aiops/
-# Select the event-processing backend. `automation_orchestrator` forwards EDA
-# events to Automation Orchestrator; `crewai` keeps the VM-local fallback.
-demo_ai_backend: automation_orchestrator
-demo_ao_url: CHANGE_ME_AUTOMATION_ORCHESTRATOR_URL
-demo_ao_username: admin
-# Optional script nodes for other demo workflows (HTTP handoffs do not need them).
-# This Developer
-# Preview flag grants workflow authors/runners code execution on AO workers,
-# including access to worker environment variables. Opt in only on a trusted
-# demo instance after its administrator approves that instance-wide capability.
-# true manages the existing admin ConfigMap flag and rolls workflow workers;
-# false leaves AO configuration untouched. Set enabled=false to roll it back.
-demo_ao_manage_script_nodes: false
-demo_ao_script_nodes_enabled: true
-demo_ao_namespace: automation-orchestrator
-demo_ao_resource_name: automation-orchestrator
-demo_ao_validate_certs: false
-demo_ao_incident_eda_trigger_path: rhel-gitops-incident
-demo_ao_pr_review_eda_trigger_path: rhel-gitops-pr-review
-demo_ao_project_name: rhel-gitops-agentic-workflows
-demo_ao_aap_integration_name: RHEL GitOps AAP
-demo_ao_llm_integration_name: RHEL GitOps LLM
-# AO's Chat Completions model is independent of the CrewAI model above.
-# GPT-4.1 is a temporary compatibility choice; retirement is January 14, 2027.
-demo_ao_llm_model: gpt-4.1
-demo_ao_mcp_integration_name: RHEL GitOps Linux MCP
-demo_ao_mcp_url: http://linux-mcp-server:8000/mcp
-demo_ao_github_mcp_integration_name: RHEL GitOps GitHub MCP
-demo_ao_github_mcp_url: http://github-mcp-server:8082/mcp
-# Work around AO's embedded-resource checkpoint bug without changing AO.
-# Adds a text adapter on port 8083 of this existing GitHub MCP Service.
-# false sends AO directly to the original URL after its runtime is fixed.
-demo_ao_github_text_adapter_enabled: true
-demo_ao_github_text_adapter_port: 8083
-demo_ao_github_text_adapter_image: registry.access.redhat.com/ubi9/python-312:latest
-demo_ao_github_mcp_deployment_name: github-mcp-server
-demo_ao_github_mcp_service_name: github-mcp-server
-demo_ao_github_mcp_container_name: github-mcp-server
-# Optional Controller EE for adapter maintenance JTs. It must contain
-# kubernetes.core and its Kubernetes Python SDK (see context/).
-demo_mcp_setup_execution_environment: ""
-demo_ao_project_name: RHEL GitOps Agentic Workflows
+# Incident and maintainer-feedback events run the existing CrewAI agents on ai-01.
+demo_ai_backend: crewai
 # `container` uses the in-namespace OpenShift Service; set `local` to use the
 # Linux MCP server installed on the AI VM over stdio instead.
 demo_ai_mcp_mode: container

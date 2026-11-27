@@ -1,7 +1,5 @@
-# Description: Configure Automation Orchestrator before AAP so runtime facts
-# can supply the freshly rotated EDA service-account credential to AAP CasC.
 ---
-- name: Configure Automation Orchestrator and AAP
-  ansible.builtin.import_playbook: ao_config.yml
-- name: Configure AAP after Automation Orchestrator
+# Apply the CrewAI demo's Controller and EDA configuration. VM runtime setup is
+# separate so ordinary CasC updates preserve the installed agent environment.
+- name: Configure the RHEL GitOps AAP and CrewAI event path
   ansible.builtin.import_playbook: aap_config.yml
