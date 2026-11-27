@@ -120,9 +120,10 @@ web-01's OS release through the external MCP, imports both entrypoints and asks
 the configured model for READY without tools. It publishes no PR and makes no
 host changes. Check its Phoenix trace after running it.
 
-EE model settings come from the JT's CasC-resolved configuration; the VM fallback
-keeps its existing `.env`. Compare those settings during migration if identical
-model behavior is required. A native CrewAI banner saying tracing is disabled
+The shared model selection is `demo_ai_llm_model` (default `gpt-6-luna`). CasC
+stores it on both primary JTs and reconciles only `AI_LLM_MODEL` in the VM's
+existing `.env`; credentials, provider settings and external MCP remain intact.
+A native CrewAI banner saying tracing is disabled
 refers to hosted AMP tracing; the separate OpenInference/Phoenix export remains
 enabled and was verified from AAP.
 

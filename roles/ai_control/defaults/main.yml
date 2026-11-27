@@ -49,7 +49,7 @@ ai_control_pip_packages:
 
 ai_control_target_hosts: []
 ai_control_llm_provider: "{{ demo_ai_llm_provider | default('openai') }}"
-ai_control_llm_model: "{{ demo_ai_llm_model | default('gpt-5.6-luna') }}"
+ai_control_llm_model: "{{ demo_ai_llm_model | default('gpt-6-luna') }}"
 ai_control_llm_base_url: "{{ demo_ai_llm_base_url | default('https://api.openai.com/v1') }}"
 ai_control_llm_api_key: "{{ vault_ai_llm_api_key | default('') }}"
 ai_control_github_token: "{{ vault_github_token | default('') }}"

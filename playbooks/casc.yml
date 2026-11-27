@@ -1,7 +1,7 @@
 ---
 # Apply Controller/EDA configuration and reconcile the deployed CrewAI scripts.
-# Initial VM/package setup stays separate; runtime updates preserve its .env,
-# Python packages, state checkout and selected external Linux MCP backend.
+# Initial VM/package setup stays separate; runtime updates reconcile the shared
+# model while preserving credentials, core packages, checkout and external MCP.
 - name: Configure the RHEL GitOps AAP and CrewAI event path
   ansible.builtin.import_playbook: aap_config.yml
 

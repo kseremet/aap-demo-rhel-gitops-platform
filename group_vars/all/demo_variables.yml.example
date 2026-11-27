@@ -42,7 +42,7 @@ rhc_repos_baseline:
 
 # AI control VM model settings. The API key belongs in vault.yml.
 demo_ai_llm_provider: openai
-demo_ai_llm_model: gpt-5.6-luna
+demo_ai_llm_model: gpt-6-luna
 
 # Internal Phoenix dashboard and CrewAI tracing; browser access uses Telepresence.
 demo_phoenix_enabled: true

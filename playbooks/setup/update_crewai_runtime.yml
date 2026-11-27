@@ -1,8 +1,8 @@
 ---
 # Update scripts on an already provisioned AI VM, directly or through casc.yml.
 # Resolve the current VMI address without rewriting generated inventories. Initial
-# provisioning remains in 04_configure_ai_vm.yml; credentials, packages, clone and
-# the external MCP configuration are preserved by this narrower deployment path.
+# provisioning remains in 04_configure_ai_vm.yml; credentials, core packages, clone
+# and MCP configuration are preserved. The shared model selection is reconciled.
 - name: Locate the existing CrewAI VM for runtime updates # noqa: fqcn[keyword] - explicit collections policy
   hosts: localhost
   connection: local

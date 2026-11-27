@@ -44,6 +44,7 @@ def test_casc_selects_the_correct_playbooks_credentials_and_public_settings(runt
             assert jt["execution_environment"] == values["demo_execution_environment_name"]
             assert jt["extra_vars"]["demo_state_scm_url"] == values["demo_state_scm_url"]
             assert jt["extra_vars"]["openshift_vm_namespace"] == "koray"
+            assert jt["extra_vars"]["demo_ai_llm_model"] == values["demo_ai_llm_model"]
             assert not any("token" in k or "api_key" in k for k in jt["extra_vars"])
         else:
             assert jt["credentials"] == [values["demo_machine_credential_name"]]

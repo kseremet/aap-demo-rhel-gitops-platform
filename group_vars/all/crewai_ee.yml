@@ -47,7 +47,7 @@ crewai_ee_job_settings:
   demo_state_scm_url: "{{ demo_state_scm_url }}"
   demo_state_scm_branch: "{{ demo_state_scm_branch }}"
   demo_ai_llm_provider: "{{ demo_ai_llm_provider | default('openai') }}"
-  demo_ai_llm_model: "{{ demo_ai_llm_model | default('gpt-5.6-luna') }}"
+  demo_ai_llm_model: "{{ demo_ai_llm_model | default('gpt-6-luna') }}"
   demo_ai_llm_base_url: "{{ demo_ai_llm_base_url | default('https://api.openai.com/v1') }}"
   demo_ai_mcp_url: "{{ demo_ai_mcp_url | default('http://linux-mcp-server.' ~ openshift_vm_namespace ~ '.svc:8000/mcp') }}"
   demo_ai_github_api_url: "{{ demo_ai_github_api_url | default('https://api.github.com') }}"

@@ -1,6 +1,19 @@
 ---
 # Shared by initial setup and CasC runtime updates. Keep the existing environment,
 # core packages and selected MCP backend; add only pinned tracing dependencies.
+- name: Reconcile the shared model selection on the fallback VM
+  ansible.builtin.lineinfile:
+    path: "{{ ai_control_app_path }}/.env"
+    regexp: '^AI_LLM_MODEL='
+    line: "AI_LLM_MODEL={{ ai_control_llm_model }}"
+    owner: "{{ ai_control_user }}"
+    group: "{{ ai_control_user }}"
+    mode: "0600"
+    backup: true
+  # Change only the model; preserve API credentials, provider and MCP configuration.
+  no_log: true
+  tags: [ai_control, crewai]
+
 - name: Install the pinned Phoenix tracing instrumentation
   # The existing venv contains packaging; the minimal RHEL system Python does not.
   vars:
