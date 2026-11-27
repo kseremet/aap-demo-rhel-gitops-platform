@@ -88,7 +88,8 @@ The user built and smoke-tested `quay.io/koray/ee-rhel-gitops-crewai:1.15.17-1`.
 Local CasC pins digest
 `sha256:03e015c98fcc8301d18cd78f60134d9cc9c053580486e102feae9515c169f686`.
 Both primary JTs use this image; the independent VM fallbacks remain available.
-A real incident/feedback cycle through the EE is still pending user testing.
+The user confirmed a real EE incident created PR #9; maintainer-feedback
+validation is still pending.
 Fresh configurations default to VM mode until an available image is selected.
 
 The planned local configuration is:

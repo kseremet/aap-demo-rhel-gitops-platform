@@ -74,7 +74,8 @@ Set non-secret model values in `group_vars/all/demo_variables.yml`:
 
 ```yaml
 demo_ai_llm_provider: openai
-demo_ai_llm_model: gpt-5.6-luna
+demo_ai_llm_model: gpt-6-luna
+demo_ai_llm_api: responses
 demo_ai_llm_base_url: https://api.openai.com/v1
 ```
 
@@ -83,6 +84,7 @@ For DeepSeek, use its OpenAI-compatible endpoint:
 ```yaml
 demo_ai_llm_provider: deepseek
 demo_ai_llm_model: deepseek-chat
+demo_ai_llm_api: completions
 demo_ai_llm_base_url: https://api.deepseek.com/v1
 ```
 

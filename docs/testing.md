@@ -1,7 +1,7 @@
 # Testing log
 
 Tracks the CrewAI EE demo and retained VM fallback. **Partial** means isolated checks passed;
-user confirmation of the complete incident and maintainer-feedback loop is pending.
+the EE incident-to-PR path is confirmed, while the maintainer-feedback loop is pending.
 
 **Status values:** `Not tested` · `Pass` · `Partial` · `Fail` · `Blocked`
 
@@ -9,14 +9,14 @@ user confirmation of the complete incident and maintainer-feedback loop is pendi
 
 | Component | Status | Last tested | Notes |
 |---|---|---|---|
-| CrewAI VM runtime | Partial | 2026-11-27 | Repository listing/search and corrected directory reads are deployed. User confirmed incident PR #8. Both scripts now use Phoenix tracing and quieter output. CrewAI 1.15.17, OpenAI 2.54.0, credentials and external MCP are preserved. Both VM entrypoints now use gpt-6-luna, reconciled through CasC. |
-| CrewAI incident and PR-review job templates | Partial | 2026-11-27 | Primary JTs 87/88 now run inside CrewAI EE 5 with API-token injection. Safe entrypoint jobs 6473/6475 passed. VM fallbacks 99/100 independently passed jobs 6470/6472 using the original SSH credential and default EE. Both EE JTs now select gpt-6-luna, matching the VM fallback. A real EE incident-to-PR and feedback cycle remain pending. |
-| EDA GitHub routing | Partial | 2026-11-27 | User confirmed redelivering the issues.opened event produced PR #8. Four offline event-contract checks cover issue investigation and feedback payloads; approval and agent-comment loop guards remain. Full feedback-loop validation is pending. |
-| AAP Configuration as Code | Partial | 2026-11-27 | Latest model-reconciliation CasC completed with localhost 179 ok/11 changed and ai-01 10 ok/2 changed; zero failures. EDA activation 36 is enabled/running. Platform project 82 is synced to codex/crewai-ee-cutover-20261127. Syntax and offline lint passed. |
+| CrewAI VM runtime | Partial | 2026-11-27 | Both scripts use gpt-6-luna with the Responses API. The shared verifier passed for both production LLM factories, each executing a real repository tool and consuming its receipt. Existing credentials, provider, endpoint, MCP settings and package versions were preserved. |
+| CrewAI incident and PR-review job templates | Partial | 2026-11-27 | User confirmed EE incident job 6481 created PR #9. Primary JTs 87/88 and verifier 101 now select responses through CasC. Independent VM fallbacks 99/100 retain their SSH credential and default EE. Maintainer-feedback execution remains pending. |
+| EDA GitHub routing | Partial | 2026-11-27 | User confirmed redelivering issues.opened produced PR #9 through the EE. EDA was re-enabled by CasC. Feedback payload regression checks and loop guards pass; a real maintainer-feedback run remains pending. |
+| AAP Configuration as Code | Partial | 2026-11-27 | Responses CasC completed with localhost 179 ok/11 changed and ai-01 11 ok/0 changed; zero failures. Initial runtime deployment changed four VM resources. Platform project 82 uses the existing deployment branch. Syntax and production-profile offline lint passed for affected playbooks, excluding vendored collections. |
 | Managed inventory address refresh | Partial | 2026-11-27 | Offline checks cover AI/fleet address updates without changing membership or SSH options, and MCP alias updates preserving identity and unrelated aliases. Generated local files remain untouched. |
 | Shared MCP services | Partial | 2026-11-27 | Original GitHub MCP container/port 8082 and Linux MCP deployment, SSH configuration and policy were preserved. Sidecar and port 8083 were removed. CrewAI discovered 23 Linux tools and read web-01 somaxconn successfully. |
-| Phoenix dashboard and CrewAI tracing | Partial | 2026-11-27 | One internal Phoenix 22.1.0 pod is healthy under restricted-v2 with a bound 2 GiB PVC. Browser UI and synthetic crew/agent/tool/model hierarchy verified. Five child spans arrived while the run root was still open; the final root flushed at exit. Real incident tracing awaits user testing. |
-| CrewAI execution environment and JT cutover | Partial | 2026-11-27 | User confirmed native build, smoke tests and push. Verified public amd64 image and pinned its digest in local CasC configuration. Latest AAP verification job 6478 passed as UID 1000950000 with GitHub access, fresh clone, both imports, external MCP host read and a gpt-6-luna reply. Phoenix received all six spans with successful root status. Thirty regression checks passed; real incident/feedback testing remains pending. |
+| Phoenix dashboard and CrewAI tracing | Partial | 2026-11-27 | Real incident job 6481/PR #9 was traced; it exposed 17 Chat Completions rejections recovered by disabling reasoning. After explicit Responses selection, EE and VM verification traces each contain 15 OK spans, including four Response spans and both required tool calls, without ChatCompletion spans or errors. |
+| CrewAI execution environment and JT cutover | Partial | 2026-11-27 | User confirmed the image build/push and real EE incident PR #9. Read-only verification job 6484 passed in 21.487 seconds as UID 1000950000: GitHub, fresh clone, 23 external MCP tools, web-01 read and both agent LLMs using Responses with real tool calls. Thirty-five regression checks pass. No EE rebuild was required; maintainer feedback remains pending. |
 
 ## Live EE cutover verification
 
@@ -61,6 +61,36 @@ user confirmation of the complete incident and maintainer-feedback loop is pendi
   staging area remain intact; updates use the existing deployment branch.
 - Repeating the runtime-only CasC apply made zero changes on the VM (10 ok,
   0 changed, 0 failed); only temporary in-memory inventory registration changed.
+
+## Responses API verification
+
+- User-confirmed incident job 6481 created PR #9, activating only the proposed
+  web-server somaxconn policy. Its Phoenix trace exposed 17 Chat Completions
+  rejections; CrewAI recovered by retrying with reasoning effort set to none.
+  The previous model-only readiness probe did not exercise tool compatibility.
+- Both production LLM factories now use the shared `demo_ai_llm_api` setting,
+  defaulting to `responses`. CasC injects it into both EE JTs and verifier 101,
+  and reconciles `AI_LLM_API` on the retained VM. No AO changes or EE rebuild.
+- The smoke test requires each production LLM factory to execute a read-only
+  repository tool and repeat a fresh receipt available only in the tool result.
+  Offline checks reject missing tool execution and unused/fabricated results.
+- EE verification job 6484 passed at source revision
+  `83ca8a3e7750d8c967047544864ac216958161fb`. Phoenix trace
+  `89f4ffeed7e559d46308debb97f67a04` has 15 OK spans, including four
+  Response spans, two verification tool calls and the external MCP read.
+- The same verifier passed on the VM. Phoenix trace
+  `458b7f57a4cc93ea38972408c85d88d6` also has 15 OK spans and four
+  Response spans. Neither trace contains ChatCompletion spans or errors.
+- Full CasC completed without failures. Repeating the runtime update through
+  CasC made zero VM changes. Per-setting fingerprints prove all pre-existing
+  VM environment values are unchanged; only `AI_LLM_API=responses` was added.
+  CrewAI 1.15.17 and OpenAI 2.54.0 are preserved.
+- Thirty-five regression checks, CasC syntax and affected-playbook offline lint
+  passed. Vendored collection lint findings were excluded; their sources were
+  not modified. The original Git checkout/index and existing inventory/fact
+  edits are preserved. Deployment uses the existing separate branch/index.
+- These checks offered no PR-publishing or remediation tools. The full incident
+  and maintainer-feedback flow with the new API remains for user live testing.
 
 ## CrewAI EE preparation verification
 
@@ -140,9 +170,9 @@ user confirmation of the complete incident and maintainer-feedback loop is pendi
 
 ## Open issues
 
-- Validate one real incident through the EE with Phoenix tracing enabled, then
-  confirm a human feedback event updates that same PR without an agent-comment loop. The user
-  already confirmed the incident-to-PR path produced PR #8 before tracing was enabled.
+- The user confirmed the real EE incident-to-PR path with Phoenix in PR #9.
+  Retest the incident with Responses and confirm a human feedback event updates
+  that same PR without an agent-comment loop.
 - Review webhook deliveries during the short EDA maintenance window and redeliver
   any missed events. The configured token returned HTTP 403 for delivery auditing;
   use the repository webhook UI or a credential with webhook-read permission.
