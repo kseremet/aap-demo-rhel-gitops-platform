@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 from pathlib import Path
+import inspect
 import sys
 
 import pytest
@@ -21,7 +22,12 @@ def plugins():
 
 def load(relative):
     loader = DataLoader()
-    return loader, loader.load_from_file(str(ROOT / relative), trusted_as_template=True)
+    options = (
+        {"trusted_as_template": True}
+        if "trusted_as_template" in inspect.signature(loader.load_from_file).parameters
+        else {}
+    )
+    return loader, loader.load_from_file(str(ROOT / relative), **options)
 
 
 @pytest.mark.parametrize(
@@ -185,9 +191,13 @@ def test_mcp_refresh_preserves_identity_and_unrelated_aliases():
 @pytest.mark.parametrize("name", ["incident_agent.py.j2", "pr_review_agent.py.j2"])
 def test_existing_agent_templates_still_compile(name):
     loader = DataLoader()
-    from ansible.template import trust_as_template
-
-    text = trust_as_template((ROOT / "roles/ai_control/templates" / name).read_text())
+    text = (ROOT / "roles/ai_control/templates" / name).read_text()
+    try:
+        from ansible.template import trust_as_template
+    except ImportError:  # Ansible 2.18 predates template trust tagging.
+        pass
+    else:
+        text = trust_as_template(text)
     rendered = Templar(
         loader=loader,
         variables={
