@@ -1,16 +1,19 @@
 ---
 # Shared by initial setup and CasC runtime updates. Keep the existing environment,
 # core packages and selected MCP backend; add only pinned tracing dependencies.
-- name: Reconcile the shared model selection on the fallback VM
+- name: Reconcile the shared model and API selection on the fallback VM
   ansible.builtin.lineinfile:
     path: "{{ ai_control_app_path }}/.env"
-    regexp: '^AI_LLM_MODEL='
-    line: "AI_LLM_MODEL={{ ai_control_llm_model }}"
+    regexp: '^{{ item.key }}='
+    line: "{{ item.key }}={{ item.value }}"
     owner: "{{ ai_control_user }}"
     group: "{{ ai_control_user }}"
     mode: "0600"
     backup: true
-  # Change only the model; preserve API credentials, provider and MCP configuration.
+  loop:
+    - {key: AI_LLM_MODEL, value: "{{ ai_control_llm_model }}"}
+    - {key: AI_LLM_API, value: "{{ ai_control_llm_api }}"}
+  # Preserve API credentials, provider, endpoint and MCP configuration.
   no_log: true
   tags: [ai_control, crewai]
 
@@ -78,6 +81,15 @@
     - ai_control
     - crewai
     - pr_review
+
+- name: Deploy the read-only integration verifier for the VM fallback
+  ansible.builtin.copy:
+    src: verify_crewai_ee.py
+    dest: "{{ ai_control_app_path }}/verify_crewai_ee.py"
+    owner: "{{ ai_control_user }}"
+    group: "{{ ai_control_user }}"
+    mode: "0644"
+  tags: [ai_control, crewai]
 
 # Import and CLI checks do not start agents, call the LLM or publish a PR.
 - name: Verify both deployed CrewAI entrypoints import successfully

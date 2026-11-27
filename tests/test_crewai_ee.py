@@ -1,5 +1,8 @@
 """Validate EE/VM selection, credential boundaries and per-job command construction."""
 
+import ast
+import json
+from types import SimpleNamespace
 from pathlib import Path
 import inspect
 import sys
@@ -45,6 +48,7 @@ def test_casc_selects_the_correct_playbooks_credentials_and_public_settings(runt
             assert jt["extra_vars"]["demo_state_scm_url"] == values["demo_state_scm_url"]
             assert jt["extra_vars"]["openshift_vm_namespace"] == "koray"
             assert jt["extra_vars"]["demo_ai_llm_model"] == values["demo_ai_llm_model"]
+            assert jt["extra_vars"]["demo_ai_llm_api"] == "responses"
             assert not any("token" in k or "api_key" in k for k in jt["extra_vars"])
         else:
             assert jt["credentials"] == [values["demo_machine_credential_name"]]
@@ -102,3 +106,51 @@ def test_build_inputs_exclude_project_secrets_and_isolate_crewai_dependencies():
         assert plays[0]["hosts"] == "localhost"
         assert plays[0]["connection"] == "local"
         assert plays[0]["become"] is False
+
+
+@pytest.mark.parametrize("template", ["incident_agent.py.j2", "pr_review_agent.py.j2"])
+def test_both_factories_pass_the_selected_native_api(template):
+    tree = ast.parse((ROOT / "roles/ai_control/templates" / template).read_text())
+    tree.body = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_llm"]
+    # Execute the real factory with a captured constructor, checking the argument
+    # reaches CrewAI rather than only existing in a config file.
+    for selected in ("responses", "completions"):
+        settings = dict(LLM_PROVIDER="openai", LLM_MODEL="gpt-6-luna",
+                        LLM_BASE_URL="https://example.invalid/v1",
+                        LLM_API_KEY="fake", LLM_API=selected)
+        namespace = {**settings, "initial_agent": SimpleNamespace(**settings),
+                     "LLM": lambda **kwargs: kwargs}
+        exec(compile(tree, template, "exec"), namespace)
+        assert namespace["_llm"]()["api"] == selected
+
+
+@pytest.mark.parametrize("behavior", ["no_tool", "unused_result", "success"])
+def test_smoke_requires_an_executed_tool_and_consumption_of_its_result(behavior):
+    tree = ast.parse((ROOT / "roles/ai_control/files/verify_crewai_ee.py").read_text())
+    tree.body = [n for n in tree.body if isinstance(n, ast.FunctionDef)
+                 and n.name == "verify_model_tool_call"]
+
+    class FakeCrew:
+        def __init__(self, **kwargs):
+            self.agent = kwargs["agents"][0]
+
+        def kickoff(self):
+            if behavior == "no_tool":
+                return "READY"
+            result = json.loads(self.agent.tools[0]())
+            return "READY " + (result["receipt"] if behavior == "success" else "invented")
+
+    namespace = {"json": json, "uuid4": lambda: "private-receipt",
+                 "tool": lambda name: lambda function: function,
+                 "Agent": lambda **kwargs: SimpleNamespace(**kwargs),
+                 "Task": lambda **kwargs: SimpleNamespace(**kwargs), "Crew": FakeCrew,
+                 "Process": SimpleNamespace(sequential="sequential"),
+                 "incident": SimpleNamespace(LLM_API="responses", list_state_files=SimpleNamespace(
+                     run=lambda **kwargs: json.dumps({"entries": [{"path": "group_vars"}]})))}
+    exec(compile(tree, "verifier", "exec"), namespace)
+    check = lambda: namespace["verify_model_tool_call"](lambda: object(), "incident")
+    if behavior == "success":
+        assert check()["tool_calls"] == 1
+    else:
+        with pytest.raises(AssertionError, match="did not execute|did not consume"):
+            check()

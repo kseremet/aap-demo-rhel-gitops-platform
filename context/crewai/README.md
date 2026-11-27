@@ -116,12 +116,13 @@ The existing EDA routes keep their JT names.
 
 CasC also provides `JT - AI EE Verification`. It uses the same workspace and
 credentials, checks a fresh checkout and authenticated GitHub access, reads
-web-01's OS release through the external MCP, imports both entrypoints and asks
-the configured model for READY without tools. It publishes no PR and makes no
-host changes. Check its Phoenix trace after running it.
+web-01's OS release through the external MCP, and requires both entrypoints'
+models to execute a read-only repository tool and consume its fresh result.
+It publishes no PR and makes no host changes. Check its Phoenix trace after
+running it.
 
 The shared model selection is `demo_ai_llm_model` (default `gpt-6-luna`). CasC
-stores it on both primary JTs and reconciles only `AI_LLM_MODEL` in the VM's
+stores it on both primary JTs and reconciles `AI_LLM_MODEL` and `AI_LLM_API` in the VM's
 existing `.env`; credentials, provider settings and external MCP remain intact.
 A native CrewAI banner saying tracing is disabled
 refers to hosted AMP tracing; the separate OpenInference/Phoenix export remains
@@ -145,3 +146,29 @@ They retain the original playbooks, AI inventory and SSH credential and use
 so they do not depend on pulling the new CrewAI EE. No VM or installed runtime
 is removed. To restore the primary JTs to VM execution, set `demo_ai_runtime: vm`
 and reapply CasC; the explicit VM EE assignment replaces the CrewAI image.
+
+### Native tool-call verification
+
+Both agent LLM factories use `demo_ai_llm_api: responses` by default, passed as
+`AI_LLM_API` in EE jobs and reconciled in the VM environment by `casc.yml`.
+This retains reasoning with native function tools on `gpt-6-luna`, avoiding
+Chat Completions retries that disable reasoning. For a provider that only
+supports Chat Completions, explicitly select `completions` and a compatible model.
+No EE rebuild is needed for this change with the pinned CrewAI 1.15.17 image.
+
+Launch **JT - AI EE Verification** to check the EE. The verifier exercises
+both production LLM factories: each model must call a read-only repository tool
+and repeat a fresh receipt available only in its result. A plain model reply
+cannot pass. The check also verifies authenticated GitHub access and external
+Linux MCP access, without publication or remediation tools.
+
+The same verifier is deployed on the VM by CasC. To check the fallback, run as
+`cloud-user` on `ai-01`:
+
+```bash
+cd /home/cloud-user/agentic-aiops
+/home/cloud-user/.venv/bin/python verify_crewai_ee.py
+```
+
+In Phoenix, confirm successful Responses spans and repository tool execution for
+both checks, with no ChatCompletion errors.

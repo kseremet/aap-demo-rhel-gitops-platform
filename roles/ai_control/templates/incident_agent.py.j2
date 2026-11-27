@@ -43,6 +43,7 @@ GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 PR_BRANCH_PREFIX = os.environ.get("AI_PR_BRANCH_PREFIX", "aiops/")
 LLM_PROVIDER = os.environ.get("AI_LLM_PROVIDER", "openai")
 LLM_MODEL = os.environ.get("AI_LLM_MODEL", "gpt-6-luna")
+LLM_API = os.environ.get("AI_LLM_API", "responses")
 LLM_BASE_URL = os.environ.get("AI_LLM_BASE_URL", "https://api.openai.com/v1")
 LLM_API_KEY = os.environ.get("AI_LLM_API_KEY", "")
 AGENT_RUN_ID = str(uuid4())
@@ -350,6 +351,8 @@ def _llm():
         model=f"{LLM_PROVIDER}/{LLM_MODEL}",
         api_key=LLM_API_KEY,
         base_url=LLM_BASE_URL,
+        # Keep native function tools and model reasoning on the same API.
+        api=LLM_API,
     )
 
 

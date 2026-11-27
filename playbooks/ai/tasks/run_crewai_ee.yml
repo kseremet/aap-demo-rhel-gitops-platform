@@ -118,6 +118,7 @@
         STATE_REPO_PATH: "{{ _crewai_workdir.path }}/state-repo"
         AI_LLM_PROVIDER: "{{ demo_ai_llm_provider }}"
         AI_LLM_MODEL: "{{ demo_ai_llm_model }}"
+        AI_LLM_API: "{{ demo_ai_llm_api | default('responses') }}"
         AI_LLM_BASE_URL: "{{ demo_ai_llm_base_url }}"
         AI_LLM_API_KEY: "{{ lookup('ansible.builtin.env', 'AI_LLM_API_KEY') }}"
         GITHUB_TOKEN: "{{ lookup('ansible.builtin.env', 'GITHUB_TOKEN') }}"

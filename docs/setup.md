@@ -174,8 +174,9 @@ the internal Phoenix dashboard, then deploys both CrewAI scripts from the role
 templates to the existing AI VM.
 Script deployment validates Python syntax and imports, keeps remote backups,
 and preserves CrewAI/OpenAI versions, credentials, state checkout and selected MCP
-backend. It reconciles only `AI_LLM_MODEL` in the VM's `.env` with the shared
-`demo_ai_llm_model` setting, currently `gpt-6-luna`. Initial runtime provisioning
+backend. It reconciles `AI_LLM_MODEL` and `AI_LLM_API` in the VM's `.env` with the shared
+`demo_ai_llm_model` and `demo_ai_llm_api` settings, currently `gpt-6-luna` and
+`responses`. Initial runtime provisioning
 remains in `04_configure_ai_vm.yml`.
 Managed AAP host addresses, including
 `ai-01`, and existing Linux MCP SSH aliases are refreshed from live VMIs without
@@ -285,3 +286,29 @@ ansible-playbook playbooks/cleanup.yml \
   -e demo_aap_cleanup_confirm=true \
   -e demo_destroy_confirm=true
 ```
+
+### Native tool-call verification
+
+Both agent LLM factories use `demo_ai_llm_api: responses` by default, passed as
+`AI_LLM_API` in EE jobs and reconciled in the VM environment by `casc.yml`.
+This retains reasoning with native function tools on `gpt-6-luna`, avoiding
+Chat Completions retries that disable reasoning. For a provider that only
+supports Chat Completions, explicitly select `completions` and a compatible model.
+No EE rebuild is needed for this change with the pinned CrewAI 1.15.17 image.
+
+Launch **JT - AI EE Verification** to check the EE. The verifier exercises
+both production LLM factories: each model must call a read-only repository tool
+and repeat a fresh receipt available only in its result. A plain model reply
+cannot pass. The check also verifies authenticated GitHub access and external
+Linux MCP access, without publication or remediation tools.
+
+The same verifier is deployed on the VM by CasC. To check the fallback, run as
+`cloud-user` on `ai-01`:
+
+```bash
+cd /home/cloud-user/agentic-aiops
+/home/cloud-user/.venv/bin/python verify_crewai_ee.py
+```
+
+In Phoenix, confirm successful Responses spans and repository tool execution for
+both checks, with no ChatCompletion errors.

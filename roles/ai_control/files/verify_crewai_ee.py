@@ -7,9 +7,44 @@ import subprocess
 from uuid import uuid4
 
 from crewai import Agent, Crew, Process, Task
+from crewai.tools import tool
 from crewai_tracing import trace_run
 import incident_agent as incident
 import pr_review_agent  # Verify both production entrypoints import in this EE.
+
+
+def verify_model_tool_call(factory, entrypoint):
+    """Require an executed repository read and consumption of its fresh result."""
+    nonce = str(uuid4())
+    observations = []
+
+    @tool("read_verification_repository")
+    def read_verification_repository() -> str:
+        """Read the state repository root and return a fresh verification receipt."""
+        listing = json.loads(incident.list_state_files.run(relative_path="."))
+        assert listing["entries"], "The state repository is empty"
+        observations.append(listing)
+        # The receipt is deliberately absent from the prompt: a guessed answer
+        # or a fabricated tool call cannot satisfy the readiness assertion.
+        return json.dumps({"receipt": nonce, "entries": listing["entries"]})
+
+    llm = factory()
+    agent = Agent(role=f"{entrypoint} tool-calling verifier",
+                  goal="Read the repository using the provided tool and echo its receipt",
+                  backstory="Perform one read-only integration check.",
+                  tools=[read_verification_repository], llm=llm,
+                  cache=False, max_iter=4, verbose=False)
+    task = Task(description=("Call read_verification_repository to read the repository. "
+                             "Then reply READY followed by the exact receipt returned "
+                             "by that tool. Do not invent a receipt."),
+                expected_output="READY followed by the tool's receipt", agent=agent)
+    reply = Crew(agents=[agent], tasks=[task], process=Process.sequential,
+                 cache=False, verbose=False).kickoff()
+    assert observations, f"{entrypoint}: the model did not execute the repository tool"
+    assert nonce in str(reply) and "READY" in str(reply).upper(), (
+        f"{entrypoint}: the model did not consume the tool result")
+    return {"entrypoint": entrypoint, "model_api": incident.LLM_API,
+            "tool_calls": len(observations), "tool_result_consumed": True}
 
 
 def main():
@@ -28,15 +63,10 @@ def main():
             arguments_json=json.dumps({"host": "web-01", "path": "/etc/os-release"}),
         )
         assert "Red Hat" in observation, "Read-only web-01 OS observation failed"
-        # Test the exact model configuration with a small response and no tools.
-        agent = Agent(role="EE connectivity verifier", goal="Reply READY only",
-                      backstory="Perform one connectivity check, without tools.",
-                      tools=[], llm=incident._llm(), verbose=False)
-        task = Task(description="Reply with the single word READY.",
-                    expected_output="READY", agent=agent)
-        reply = Crew(agents=[agent], tasks=[task], process=Process.sequential,
-                     verbose=False).kickoff()
-        assert "READY" in str(reply).upper(), "The configured model did not confirm readiness"
+        # Exercise both production LLM constructors with native function tools.
+        model_checks = [verify_model_tool_call(factory, entrypoint)
+                        for entrypoint, factory in (("incident", incident._llm),
+                                                    ("pr_review", pr_review_agent._llm))]
         head = subprocess.check_output(
             ["git", "-C", str(incident.STATE_REPO_PATH), "rev-parse", "HEAD"], text=True,
         ).strip()
@@ -44,7 +74,8 @@ def main():
                           "uid": os.geteuid(), "state_revision": head,
                           "authenticated_github_read": True, "external_mcp_tools": len(catalog),
                           "read_only_host": "web-01", "configured_model": incident.LLM_MODEL,
-                          "model_reply": "READY", "both_entrypoints_imported": True}))
+                          "model_reply": "READY", "model_tool_checks": model_checks,
+                          "both_entrypoints_imported": True}))
 
 
 if __name__ == "__main__":
