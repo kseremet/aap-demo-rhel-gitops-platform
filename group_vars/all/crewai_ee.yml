@@ -1,0 +1,95 @@
+---
+# Loaded only when demo_ai_runtime=ee, before CasC dispatch. Secrets are injected
+# at job launch; none of these values are baked into the container image.
+crewai_ee_credential_types:
+  - name: CrewAI API Tokens
+    kind: cloud
+    inputs:
+      fields:
+        - {id: ai_llm_api_key, type: string, label: Model API key, secret: true}
+        - {id: github_token, type: string, label: GitHub token, secret: true}
+      required: [ai_llm_api_key, github_token]
+    injectors:
+      env:
+        AI_LLM_API_KEY: !unsafe "{{ ai_llm_api_key }}"
+        GITHUB_TOKEN: !unsafe "{{ github_token }}"
+
+crewai_ee_credentials:
+  - name: "{{ demo_ai_api_credential_name | default('RHEL GitOps CrewAI API Tokens') }}"
+    organization: "{{ demo_organization_name }}"
+    credential_type: CrewAI API Tokens
+    inputs:
+      ai_llm_api_key: "{{ vault_ai_llm_api_key }}"
+      github_token: "{{ vault_github_token }}"
+    no_log: true
+
+crewai_ee_registry_credentials:
+  - name: "{{ hub_registry_credential_name | default('PAH Container Registry') }}"
+    organization: "{{ demo_organization_name }}"
+    credential_type: Container Registry
+    inputs:
+      host: "{{ hub_registry_host | default(aap_hostname | regex_replace('^https?://', '') | regex_replace('/$', '')) }}"
+      username: "{{ vault_hub_registry_username }}"
+      password: "{{ vault_hub_registry_password }}"
+      verify_ssl: "{{ aap_validate_certs }}"
+    no_log: true
+
+crewai_ee_execution_environments:
+  - name: "{{ demo_execution_environment_name | default('RHEL GitOps CrewAI EE') }}"
+    organization: "{{ demo_organization_name }}"
+    image: "{{ demo_execution_environment_image }}"
+    pull: missing
+    credential: "{{ (hub_registry_credential_name | default('PAH Container Registry')) if demo_ee_registry_auth | default(false) | bool else omit }}"
+
+# Resolve defaults once here; CasC stores this complete non-secret configuration
+# on both JTs because demo_variables.yml and vault.yml are absent from SCM jobs.
+crewai_ee_job_settings:
+  demo_state_scm_url: "{{ demo_state_scm_url }}"
+  demo_state_scm_branch: "{{ demo_state_scm_branch }}"
+  demo_ai_llm_provider: "{{ demo_ai_llm_provider | default('openai') }}"
+  demo_ai_llm_model: "{{ demo_ai_llm_model | default('gpt-5.6-luna') }}"
+  demo_ai_llm_base_url: "{{ demo_ai_llm_base_url | default('https://api.openai.com/v1') }}"
+  demo_ai_mcp_url: "{{ demo_ai_mcp_url | default('http://linux-mcp-server.' ~ openshift_vm_namespace ~ '.svc:8000/mcp') }}"
+  demo_ai_github_api_url: "{{ demo_ai_github_api_url | default('https://api.github.com') }}"
+  demo_ai_pr_branch_prefix: "{{ demo_ai_pr_branch_prefix | default('aiops/') }}"
+  demo_phoenix_enabled: "{{ demo_phoenix_enabled | default(true) }}"
+  demo_phoenix_project: "{{ demo_phoenix_project | default('rhel-gitops') }}"
+  openshift_vm_namespace: "{{ openshift_vm_namespace }}"
+
+# These always use an existing general-purpose EE and the retained VM credential,
+# so an unavailable CrewAI image cannot prevent an operator choosing the fallback.
+crewai_vm_fallback_templates:
+  - name: JT - AI Incident Investigation (VM fallback)
+    description: Run the retained CrewAI VM when EE execution is unavailable.
+    organization: "{{ demo_organization_name }}"
+    job_type: run
+    inventory: "{{ demo_ai_inventory_name }}"
+    project: "{{ demo_platform_project_name }}"
+    execution_environment: "{{ demo_ai_vm_execution_environment | default('Default execution environment') }}"
+    playbook: playbooks/ai/run_incident_agent.yml
+    credentials: ["{{ demo_machine_credential_name }}"]
+    ask_variables_on_launch: true
+
+  - name: JT - AI PR Review (VM fallback)
+    description: Process feedback using the retained CrewAI VM.
+    organization: "{{ demo_organization_name }}"
+    job_type: run
+    inventory: "{{ demo_ai_inventory_name }}"
+    project: "{{ demo_platform_project_name }}"
+    execution_environment: "{{ demo_ai_vm_execution_environment | default('Default execution environment') }}"
+    playbook: playbooks/ai/run_pr_review_agent.yml
+    credentials: ["{{ demo_machine_credential_name }}"]
+    ask_variables_on_launch: true
+
+# A repeatable cutover check uses the same image, token injection and workspace.
+crewai_ee_verification_templates:
+  - name: JT - AI EE Verification
+    description: Verify EE credentials, repository access, external MCP, model and tracing without creating a PR.
+    organization: "{{ demo_organization_name }}"
+    job_type: run
+    inventory: "{{ demo_ai_inventory_name }}"
+    project: "{{ demo_platform_project_name }}"
+    execution_environment: "{{ demo_execution_environment_name | default('RHEL GitOps CrewAI EE') }}"
+    playbook: playbooks/ai/verify_crewai_ee.yml
+    credentials: ["{{ demo_ai_api_credential_name | default('RHEL GitOps CrewAI API Tokens') }}"]
+    extra_vars: "{{ crewai_ee_job_settings }}"

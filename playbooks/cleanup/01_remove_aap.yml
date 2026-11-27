@@ -76,6 +76,15 @@
       - name: JT - AI PR Review
         organization: "{{ demo_organization_name }}"
         state: absent
+      - name: JT - AI Incident Investigation (VM fallback)
+        organization: "{{ demo_organization_name }}"
+        state: absent
+      - name: JT - AI PR Review (VM fallback)
+        organization: "{{ demo_organization_name }}"
+        state: absent
+      - name: JT - AI EE Verification
+        organization: "{{ demo_organization_name }}"
+        state: absent
     eda_rulebook_activations:
       - name: GitHub AI Incident Issues
         organization: "{{ demo_organization_name }}"
@@ -94,6 +103,89 @@
       ansible.builtin.include_role:
         name: infra.aap_configuration.dispatch
       when: demo_organization_exists | bool
+      tags: [cleanup]
+
+    # Delete only the EE objects declared for this demo, after their job templates.
+    # These are absent before the first EE cutover; VM resources are handled above.
+    - name: Remove the demo CrewAI execution environment
+      ansible.controller.execution_environment:
+        name: "{{ demo_execution_environment_name | default('RHEL GitOps CrewAI EE') }}"
+        organization: "{{ demo_organization_name }}"
+        state: absent
+        controller_host: "{{ aap_hostname }}"
+        controller_oauthtoken: "{{ aap_token }}"
+        validate_certs: "{{ aap_validate_certs }}"
+      when: demo_organization_exists | bool
+      tags: [cleanup]
+
+    # A custom type is global; look it up before deleting its credential.
+    - name: Look up the CrewAI API credential type before removing it
+      ansible.builtin.uri:
+        url: >-
+          {{ aap_hostname | regex_replace('^(?!https?://)', 'https://') | regex_replace('/+$', '')
+          }}/api/controller/v2/credential_types/?name=CrewAI%20API%20Tokens
+        headers:
+          Authorization: "Bearer {{ aap_token }}"
+        validate_certs: "{{ aap_validate_certs }}"
+      register: _crewai_cleanup_type
+      when: demo_organization_exists | bool
+      no_log: true
+      tags: [cleanup]
+
+    - name: Remove the demo CrewAI API credential
+      ansible.controller.credential:
+        credential_type: CrewAI API Tokens
+        name: "{{ demo_ai_api_credential_name | default('RHEL GitOps CrewAI API Tokens') }}"
+        organization: "{{ demo_organization_name }}"
+        state: absent
+        controller_host: "{{ aap_hostname }}"
+        controller_oauthtoken: "{{ aap_token }}"
+        validate_certs: "{{ aap_validate_certs }}"
+      when:
+        - demo_organization_exists | bool
+        - _crewai_cleanup_type.json.count == 1
+      tags: [cleanup]
+
+    - name: Remove the optional demo registry credential
+      ansible.controller.credential:
+        credential_type: Container Registry
+        name: "{{ hub_registry_credential_name | default('PAH Container Registry') }}"
+        organization: "{{ demo_organization_name }}"
+        state: absent
+        controller_host: "{{ aap_hostname }}"
+        controller_oauthtoken: "{{ aap_token }}"
+        validate_certs: "{{ aap_validate_certs }}"
+      when:
+        - demo_organization_exists | bool
+        - demo_ee_registry_auth | default(false) | bool
+      tags: [cleanup]
+
+    - name: Check whether any credentials still use the global CrewAI type
+      ansible.builtin.uri:
+        url: >-
+          {{ aap_hostname | regex_replace('^(?!https?://)', 'https://') | regex_replace('/+$', '')
+          }}/api/controller/v2/credentials/?credential_type={{ _crewai_cleanup_type.json.results[0].id }}&page_size=1
+        headers:
+          Authorization: "Bearer {{ aap_token }}"
+        validate_certs: "{{ aap_validate_certs }}"
+      register: _crewai_cleanup_users
+      when:
+        - demo_organization_exists | bool
+        - _crewai_cleanup_type.json.count == 1
+      no_log: true
+      tags: [cleanup]
+
+    - name: Remove the unused CrewAI API credential type
+      ansible.controller.credential_type:
+        name: CrewAI API Tokens
+        state: absent
+        controller_host: "{{ aap_hostname }}"
+        controller_oauthtoken: "{{ aap_token }}"
+        validate_certs: "{{ aap_validate_certs }}"
+      when:
+        - demo_organization_exists | bool
+        - _crewai_cleanup_type.json.count == 1
+        - _crewai_cleanup_users.json.count == 0
       tags: [cleanup]
 
 - name: Remove the demo AAP organization

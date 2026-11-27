@@ -223,16 +223,25 @@ to the VM-local server. The service uses an OpenShift Secret for its SSH key and
 read from `/home/cloud-user/agentic-aiops/.env`.
 
 GitHub issue events launch `JT - AI Incident Investigation` through EDA. Maintainer
-feedback launches `JT - AI PR Review`, which revises the same PR. Both jobs run
-the existing CrewAI scripts on `ai-01`; the agents use Linux MCP for read-only
+feedback launches `JT - AI PR Review`, which revises the same PR. By default both
+jobs run the existing CrewAI scripts on `ai-01`; the agents use Linux MCP for read-only
 host diagnostics and the GitHub API for proposals. Human review and merge remain
 required before GitOps reconciliation applies desired state.
 
 Set `demo_ai_llm_provider`, `demo_ai_llm_model`, and `demo_ai_llm_base_url` in
 `group_vars/all/demo_variables.yml`. Keep credentials in `vault.yml` and encrypt
-that file before use. `playbooks/casc.yml` configures Controller and EDA without
-reinstalling the VM's Python environment or agent scripts.
+that file before use. `playbooks/casc.yml` configures Controller and EDA, then
+updates both agent scripts from the same templates used by initial setup.
+It also provisions an internal Phoenix tracing dashboard and installs the pinned
+instrumentation into the VM's existing Python environment. CrewAI/OpenAI versions,
+`.env`, and the state checkout are preserved. See [watching execution in Phoenix](docs/setup.md#watch-crewai-execution-in-phoenix).
 
 CasC refreshes managed Controller and existing Linux MCP SSH addresses from live
 VMIs in memory. It preserves generated local inventory files and the MCP policy
 and SSH identity. See [setup and verification](docs/setup.md).
+
+The [CrewAI EE build guide](context/crewai/README.md) provides a separate native
+x86_64 image specification and staged AAP cutover. After its image is built and
+verified, `demo_ai_runtime: ee` selects localhost execution inside that EE and
+creates independently runnable VM fallback templates. Until then VM mode remains
+the default and the live jobs are unchanged.

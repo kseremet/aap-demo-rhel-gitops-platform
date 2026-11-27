@@ -1,0 +1,6 @@
+{{ {
+  'enabled': ai_control_tracing_enabled | bool,
+  'endpoint': ai_control_tracing_endpoint,
+  'project': ai_control_tracing_project,
+  'dashboard_url': ai_control_tracing_dashboard_url
+} | to_nice_json }}

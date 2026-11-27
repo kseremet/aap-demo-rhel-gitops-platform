@@ -1,0 +1,3 @@
+git-core [platform:rpm]
+libgomp [platform:rpm]
+python3.12-pip [platform:rpm]

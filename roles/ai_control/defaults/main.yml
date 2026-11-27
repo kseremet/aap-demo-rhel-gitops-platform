@@ -61,3 +61,15 @@ ai_control_pr_branch_prefix: "{{ demo_ai_pr_branch_prefix | default('aiops/') }}
 ai_control_agent_path: "{{ ai_control_app_path }}/incident_agent.py"
 ai_control_review_agent_path: "{{ ai_control_app_path }}/pr_review_agent.py"
 ai_control_mcp_user: "cloud-user"
+
+# Phoenix is cluster-internal; the Mac reaches this Service through Telepresence.
+ai_control_tracing_enabled: "{{ demo_phoenix_enabled | default(true) }}"
+ai_control_tracing_endpoint: "http://phoenix.{{ openshift_vm_namespace | default('koray') }}.svc:6006/v1/traces"
+ai_control_tracing_dashboard_url: "http://phoenix.{{ openshift_vm_namespace | default('koray') }}.svc.cluster.local:6006"
+ai_control_tracing_project: "{{ demo_phoenix_project | default('rhel-gitops') }}"
+# Add instrumentation to the existing environment without upgrading CrewAI/OpenAI.
+ai_control_tracing_packages:
+  - openinference-instrumentation-crewai==1.1.30
+  - openinference-instrumentation-openai==0.1.77
+  - opentelemetry-sdk==1.42.1
+  - opentelemetry-exporter-otlp-proto-http==1.42.1

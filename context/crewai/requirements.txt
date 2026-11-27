@@ -1,0 +1,12 @@
+# Match the tested VM's direct dependencies. No Linux MCP server is needed here.
+crewai[openai]==1.15.17
+openai==2.54.0
+mcp==1.28.1
+python-dotenv==1.2.3
+pysqlite3-binary==0.5.4.post2
+httpx==0.28.1
+requests==2.34.2
+openinference-instrumentation-crewai==1.1.30
+openinference-instrumentation-openai==0.1.77
+opentelemetry-sdk==1.42.1
+opentelemetry-exporter-otlp-proto-http==1.42.1

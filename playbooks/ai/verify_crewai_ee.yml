@@ -1,0 +1,15 @@
+---
+# Run the same EE preparation path without investigating an issue or publishing.
+# Verifies real API credentials, external MCP, Phoenix and one tiny model reply.
+- name: Verify the CrewAI EE integration # noqa: fqcn[keyword] - explicit collections policy
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  collections: [ansible.builtin]
+  vars:
+    _crewai_workflow: verify
+  tasks:
+    - name: Verify integration using the normal isolated job workspace
+      ansible.builtin.import_tasks: tasks/run_crewai_ee.yml
+      tags: [crewai]

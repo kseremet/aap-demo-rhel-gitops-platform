@@ -1,0 +1,7 @@
+---
+# Minimal internal demo dashboard. SQLite needs one writer and a persistent disk.
+phoenix_enabled: "{{ demo_phoenix_enabled | default(true) }}"
+phoenix_image: "{{ demo_phoenix_image | default('docker.io/arizephoenix/phoenix:version-22.1.0-nonroot') }}"
+phoenix_storage_size: "{{ demo_phoenix_storage_size | default('2Gi') }}"
+# Empty uses the cluster's default StorageClass.
+phoenix_storage_class: "{{ demo_phoenix_storage_class | default('') }}"

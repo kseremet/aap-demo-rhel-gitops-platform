@@ -1,0 +1,5 @@
+---
+# The job playbooks use ansible.builtin only. No Automation Hub configuration,
+# registry password or token-bearing ansible.cfg is copied into the build.
+collections: []
+roles: []

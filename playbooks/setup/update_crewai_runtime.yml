@@ -1,0 +1,81 @@
+---
+# Update scripts on an already provisioned AI VM, directly or through casc.yml.
+# Resolve the current VMI address without rewriting generated inventories. Initial
+# provisioning remains in 04_configure_ai_vm.yml; credentials, packages, clone and
+# the external MCP configuration are preserved by this narrower deployment path.
+- name: Locate the existing CrewAI VM for runtime updates # noqa: fqcn[keyword] - explicit collections policy
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  collections: [ansible.builtin, kubevirt.core]
+  tags: [crewai_runtime]
+  vars:
+    # Kubernetes dependencies belong to the Python environment running Ansible.
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+  vars_files:
+    - ../../vault.yml
+    - ../../group_vars/all/demo_variables.yml
+    - ../../group_vars/all/vm_specs.yml
+  tasks:
+    - name: Read the current AI control VMI address
+      kubevirt.core.kubevirt_vmi_info:
+        name: "{{ vm_specs['ai-01'].vm_name }}"
+        namespace: "{{ openshift_vm_namespace }}"
+        host: "{{ openshift_api_url }}"
+        api_key: "{{ vault_openshift_token }}"
+        validate_certs: "{{ openshift_validate_certs }}"
+      register: _crewai_vmi
+      no_log: true
+
+    - name: Require a running AI VM with one management address
+      ansible.builtin.assert:
+        that:
+          - _crewai_vmi.resources | length == 1
+          - _crewai_vmi.resources[0].status.phase == 'Running'
+          - >-
+            (_crewai_vmi.resources[0].status.interfaces
+             | selectattr('name', 'equalto', 'default')
+             | selectattr('ipAddress', 'defined') | list | length) == 1
+        fail_msg: Provision the AI control VM before updating its runtime.
+
+    - name: Register the live AI VM without changing local inventory files
+      ansible.builtin.add_host:
+        name: ai-01
+        groups: crewai_runtime_update
+        ansible_host: >-
+          {{ _crewai_vmi.resources[0].status.interfaces
+             | selectattr('name', 'equalto', 'default')
+             | map(attribute='ipAddress') | first }}
+        ansible_user: cloud-user
+        ansible_private_key_file: "{{ playbook_dir }}/../../{{ demo_ssh_private_key_file }}"
+        ansible_become: true
+
+- name: Deploy the CrewAI scripts without reinstalling the runtime # noqa: fqcn[keyword] - explicit collections policy
+  hosts: crewai_runtime_update
+  become: true
+  gather_facts: false
+  collections: [ansible.builtin]
+  tags: [crewai_runtime]
+  vars_files:
+    - ../../group_vars/all/demo_variables.yml
+  tasks:
+    - name: Check that the AI VM has already been configured
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /home/cloud-user/agentic-aiops/.env
+        - /home/cloud-user/.venv/bin/python
+      register: _crewai_existing_runtime
+
+    - name: Require the existing environment before replacing scripts
+      ansible.builtin.assert:
+        that:
+          - _crewai_existing_runtime.results | map(attribute='stat.exists') | min
+        fail_msg: Run playbooks/setup/04_configure_ai_vm.yml before applying runtime updates.
+
+    - name: Apply the same script deployment tasks used during initial setup
+      ansible.builtin.include_role:
+        name: ai_control
+        tasks_from: runtime.yml
+        apply:
+          tags: [crewai_runtime]

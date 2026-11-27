@@ -169,8 +169,13 @@ it will not race with an in-progress manual sync.
 ansible-playbook playbooks/casc.yml --vault-id @prompt
 ```
 
-This configures the CrewAI job templates and the GitHub EDA activation. It does
-not reinstall the working AI VM runtime. Managed AAP host addresses, including
+This configures the CrewAI job templates and the GitHub EDA activation, deploys
+the internal Phoenix dashboard, then deploys both CrewAI scripts from the role
+templates to the existing AI VM.
+Script deployment validates Python syntax and imports, keeps remote backups,
+and preserves CrewAI/OpenAI versions, `.env`, state checkout and selected MCP
+backend. Initial runtime provisioning remains in `04_configure_ai_vm.yml`.
+Managed AAP host addresses, including
 `ai-01`, and existing Linux MCP SSH aliases are refreshed from live VMIs without
 rewriting generated local files. The activation is briefly disabled for updates
 and enabled after configuration; review webhook deliveries during maintenance
@@ -182,7 +187,76 @@ imports, authenticated read-only GitHub access, the configured model, and Linux
 MCP tool discovery before a controlled incident-to-PR test. Maintainer feedback
 must update that same PR; marked agent comments must not retrigger the rulebook.
 
+For script-only updates through the same CasC entry point, run:
+
+```bash
+ansible-playbook playbooks/casc.yml --tags crewai_runtime --skip-tags aap --vault-id @prompt
+```
+
+This path resolves the AI VM's live address and does not disable EDA or change
+AAP objects. `--skip-tags aap` also skips the dispatch role's mandatory argument
+validation tasks. Both incident and feedback agents can list repository directories,
+search tracked filenames and content, and read discovered policy files. The
+tools exclude Git metadata and paths escaping the checkout, and bound their
+output. Review agents use the local base checkout alongside the PR diff.
+
+## Watch CrewAI execution in Phoenix
+
+Phoenix runs as one nonroot pod in the demo namespace with a 2 GiB persistent
+volume and SQLite. It uses a ClusterIP Service, with no public Route, external
+database, collector, cloud account or license key. This demo endpoint has no
+application authentication and is intended for the trusted cluster network;
+keep it internal. Its telemetry, external resource fetching and MCP server are
+disabled. The server image and tracing instrumentation versions are pinned.
+
+With Telepresence connected, open:
+
+```text
+http://phoenix.koray.svc.cluster.local:6006
+```
+
+Select the `rhel-gitops` project and start the incident or PR-review JT. Completed
+tool and model spans are exported every second while the crew continues running;
+the root span finishes at job exit. Refresh the trace list if necessary. AAP
+output includes the dashboard URL, project, trace ID and final report, with verbose
+CrewAI narration disabled while tracing is enabled. Trace data can include model
+prompts, repository content and diagnostic results.
+
+For another namespace, substitute `openshift_vm_namespace` in the URL. Without
+Telepresence, use a local port-forward and open `http://localhost:6006`:
+
+```bash
+oc -n koray port-forward service/phoenix 6006:6006
+```
+
+To deploy only Phoenix and the instrumented scripts without updating AAP/EDA:
+
+```bash
+ansible-playbook playbooks/casc.yml --tags phoenix,crewai_runtime --skip-tags aap --vault-id @prompt
+```
+
+Full `casc.yml` includes the same deployment. Initial AI VM setup also installs
+the helper and pinned tracing packages through the shared role tasks. Tracing
+uses a separate `tracing.json`; existing credentials and the external Linux MCP
+settings in `.env` are preserved. An exporter failure does not undo a PR or
+prevent the crew from running. Set `demo_phoenix_enabled: false` and reapply the
+runtime to disable tracing and restore verbose output.
+
+To remove the dashboard, first disable tracing as above, then run:
+
+```bash
+ansible-playbook playbooks/cleanup/04_remove_phoenix.yml -e demo_phoenix_cleanup_confirm=true --vault-id @prompt
+```
+
+The PVC is retained. Add `-e demo_phoenix_delete_data=true` only to permanently
+delete its trace history. The setup and cleanup playbooks affect only Phoenix.
+
 ## PR review feedback loop
+
+For the prepared x86_64 CrewAI execution environment, build and cutover
+instructions are in [the CrewAI EE guide](../context/crewai/README.md). VM mode
+remains active until the image is built, pushed, verified and selected through
+CasC. The EE cutover also creates independent VM fallback job templates.
 
 The platform also provides `JT - AI PR Review`. Enable these additional GitHub
 webhook events for the existing EDA route:

@@ -13,9 +13,13 @@ from uuid import uuid4
 
 from crewai import Agent, Crew, LLM, Process, Task
 from crewai.tools import tool
+from crewai_tracing import crew_verbose, trace_run
 
 import incident_agent as initial_agent
 
+# Share the same confined repository navigation with incident investigations.
+list_state_files = initial_agent.list_state_files
+search_state_files = initial_agent.search_state_files
 
 GITHUB_API_URL = initial_agent.GITHUB_API_URL
 GITHUB_TOKEN = initial_agent.GITHUB_TOKEN
@@ -165,9 +169,10 @@ def run_review(event):
             "You review proposed GitOps changes. Read the complete PR conversation and use "
             "Linux MCP only for evidence. Never modify a host or create a second PR."
         ),
-        tools=[read_pull_request_context, read_state_file, call_linux_read_tool],
+        tools=[read_pull_request_context, list_state_files, search_state_files, read_state_file,
+               initial_agent.discover_linux_tools, call_linux_read_tool],
         llm=_llm(),
-        verbose=True,
+        verbose=crew_verbose(),
     )
     implementer = Agent(
         role="Pull Request Revision Author",
@@ -176,9 +181,10 @@ def run_review(event):
             "You make minimal, reviewable changes on the existing PR branch. You may create "
             "new state roles or files when justified, but never modify managed hosts directly."
         ),
-        tools=[read_pull_request_context, read_state_file, update_pull_request_file, comment_on_pull_request],
+        tools=[read_pull_request_context, list_state_files, search_state_files, read_state_file,
+               update_pull_request_file, comment_on_pull_request],
         llm=_llm(),
-        verbose=True,
+        verbose=crew_verbose(),
     )
     reporter = Agent(
         role="Pull Request Review Reporter",
@@ -186,14 +192,17 @@ def run_review(event):
         backstory="You write concise, factual review responses and never claim approval.",
         tools=[comment_on_pull_request],
         llm=_llm(),
-        verbose=True,
+        verbose=crew_verbose(),
     )
 
     investigate = Task(
         description=(
             "Review the new human feedback in the supplied PR context. Determine whether it "
             "requests a change, asks a question, or rejects the proposal. Re-run read-only "
-            "MCP diagnostics when the feedback requires new evidence."
+            "MCP diagnostics when the feedback requires new evidence. List the repository "
+            "root and search for relevant variables to discover real filenames before reading "
+            "policy. The local checkout is the base policy; use the PR context and diff for "
+            "the proposed branch changes. Do not assume a guessed filename must exist."
         ),
         expected_output="Feedback interpretation, evidence, and a precise revision plan or no-action decision.",
         agent=investigator,
@@ -218,9 +227,10 @@ def run_review(event):
         agents=[investigator, implementer, reporter],
         tasks=[investigate, revise, report],
         process=Process.sequential,
-        verbose=True,
+        verbose=crew_verbose(),
     )
-    return crew.kickoff()
+    with trace_run("pr-review", REVIEW_RUN_ID):
+        return crew.kickoff()
 
 
 def main():

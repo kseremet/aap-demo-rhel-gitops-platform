@@ -1,0 +1,40 @@
+---
+# Build on native x86_64 Linux. Keep CrewAI in its own Python 3.12 environment
+# so its dependencies do not replace the supported EE's Ansible/Runner packages.
+# Application scripts come from the AAP project; no credentials enter this image.
+version: 3
+images:
+  base_image:
+    name: registry.redhat.io/ansible-automation-platform-27/ee-supported-rhel9:latest
+options:
+  package_manager_path: /usr/bin/microdnf
+  user: "1000"
+dependencies:
+  python_interpreter:
+    python_path: /usr/bin/python3.12
+  galaxy: requirements.yml
+  system: bindep.txt
+additional_build_files:
+  - src: requirements.txt
+    dest: crewai
+  - src: sitecustomize.py
+    dest: crewai
+  - src: smoke.py
+    dest: crewai
+additional_build_steps:
+  prepend_builder:
+    - ENV PYCMD=/usr/bin/python3.12
+    # Builder introspects collections inherited from ee-supported too. Their
+    # native Python dependencies compile during assemble, in this stage.
+    - RUN microdnf install -y gcc python3.12-devel systemd-devel glib2-devel dbus-devel krb5-devel && microdnf clean all
+  prepend_final:
+    - ENV PYCMD=/usr/bin/python3.12
+  append_final:
+    - COPY _build/crewai/requirements.txt /tmp/crewai-requirements.txt
+    - RUN /usr/bin/python3.12 -m venv /opt/crewai
+    - 'RUN /opt/crewai/bin/python -m pip install --no-cache-dir --only-binary=:all: -r /tmp/crewai-requirements.txt'
+    - COPY _build/crewai/sitecustomize.py /opt/crewai/lib/python3.12/site-packages/sitecustomize.py
+    - COPY _build/crewai/smoke.py /opt/crewai-smoke.py
+    - ENV PYTHONDONTWRITEBYTECODE=1 CREWAI_TRACING_ENABLED=false
+    - RUN /opt/crewai/bin/python /opt/crewai-smoke.py
+    - RUN rm -f /tmp/crewai-requirements.txt

@@ -8,6 +8,7 @@ from contextlib import AsyncExitStack, asynccontextmanager
 import json
 import os
 import re
+import subprocess
 import sys
 import urllib.error
 import urllib.parse
@@ -22,6 +23,7 @@ from dotenv import load_dotenv
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.client.streamable_http import streamablehttp_client
+from crewai_tracing import crew_verbose, trace_run
 
 
 load_dotenv("{{ ai_control_app_path }}/.env")
@@ -129,15 +131,102 @@ def call_linux_read_tool(tool_name: str, arguments_json: str) -> str:
         return f"Invalid tool arguments: {exc}"
 
 
+def _state_path(relative_path):
+    """Confine reads to the checkout, including when a path contains a symlink."""
+    candidate = Path(relative_path)
+    if candidate.is_absolute() or ".." in candidate.parts or ".git" in candidate.parts:
+        raise ValueError("path must stay inside the state repository; Git metadata is excluded")
+    root = STATE_REPO_PATH.resolve()
+    path = (STATE_REPO_PATH / relative_path).resolve()
+    if not path.is_relative_to(root) or ".git" in path.relative_to(root).parts:
+        raise ValueError("path escapes the state repository or enters Git metadata")
+    return path
+
+
+@tool("List GitOps state repository files")
+def list_state_files(relative_path: str = ".") -> str:
+    """List a repository directory, starting with '.'; follow returned directories to explore."""
+    try:
+        path = _state_path(relative_path)
+        if not path.is_dir():
+            return f"Not a repository directory: {relative_path}"
+        entries = []
+        truncated = False
+        for child in sorted(path.iterdir(), key=lambda p: p.name):
+            if child.name == ".git" or child.is_symlink():
+                continue
+            if len(entries) == 200:
+                truncated = True
+                break
+            entries.append({
+                "path": child.relative_to(STATE_REPO_PATH.resolve()).as_posix(),
+                "type": "directory" if child.is_dir() else "file",
+            })
+        return json.dumps({"entries": entries, "truncated": truncated})
+    except (OSError, ValueError, RuntimeError) as exc:
+        return f"Cannot list repository directory: {exc}"
+
+
+@tool("Search GitOps state repository")
+def search_state_files(query: str) -> str:
+    """Find literal, case-insensitive text in tracked filenames and UTF-8 file contents.
+
+    Search for issue terms or variable names before guessing paths. Results include
+    repository-relative paths and line numbers. Large/binary files are skipped.
+    """
+    if not query.strip():
+        return "Supply a non-empty literal search term."
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(STATE_REPO_PATH), "ls-files", "--cached", "-z"],
+            check=True, capture_output=True, timeout=15,
+        )
+        names = sorted(set(os.fsdecode(result.stdout).strip("\0").split("\0")))
+        needle = query.casefold()
+        matches, skipped = [], 0
+        truncated = len(names) > 2000
+        for name in names[:2000]:
+            try:
+                path = _state_path(name)
+                if path.is_symlink() or not path.is_file() or path.stat().st_size > 131072:
+                    skipped += 1
+                    continue
+                content = path.read_text(encoding="utf-8")
+                if "\0" in content:
+                    skipped += 1
+                    continue
+            except (OSError, ValueError, RuntimeError):
+                skipped += 1
+                continue
+            if needle in name.casefold():
+                matches.append({"path": name, "line": None, "text": "Filename match"})
+            for number, line in enumerate(content.splitlines(), 1):
+                if needle in line.casefold():
+                    matches.append({"path": name, "line": number, "text": line[:240]})
+                if len(matches) >= 60:
+                    break
+            if len(matches) >= 60:
+                truncated = True
+                break
+        return json.dumps({"matches": matches[:60], "truncated": truncated, "skipped_files": skipped})
+    except (OSError, subprocess.SubprocessError) as exc:
+        return f"Cannot search repository: {exc}"
+
+
 @tool("Read a GitOps state file")
 def read_state_file(relative_path: str) -> str:
-    """Read a text file from the checked-out public state repository."""
-    path = (STATE_REPO_PATH / relative_path).resolve()
-    if STATE_REPO_PATH.resolve() not in path.parents:
-        return "REFUSED: path escapes the state repository"
-    if not path.is_file():
-        return f"State file not found: {relative_path}"
-    return path.read_text(encoding="utf-8")
+    """Read a discovered UTF-8 repository file; directories return their file listing."""
+    try:
+        path = _state_path(relative_path)
+        if path.is_dir():
+            return list_state_files.func(relative_path=relative_path)
+        if not path.is_file():
+            return f"State file not found: {relative_path}. List its parent directory or search the repository."
+        if path.stat().st_size > 131072:
+            return "File exceeds the 128 KiB read limit; use repository search to locate relevant lines."
+        return path.read_text(encoding="utf-8")
+    except (OSError, ValueError, RuntimeError) as exc:
+        return f"Cannot read repository file: {exc}"
 
 
 def _github_repo():
@@ -274,9 +363,9 @@ def run(problem):
             "You investigate Linux incidents carefully. Discover tools first, use only "
             "read-only tools, identify the target host, and never modify a host."
         ),
-        tools=[discover_linux_tools, call_linux_read_tool, read_state_file],
+        tools=[discover_linux_tools, call_linux_read_tool, list_state_files, search_state_files, read_state_file],
         llm=_llm(),
-        verbose=True,
+        verbose=crew_verbose(),
     )
     analyst = Agent(
         role="GitOps Root Cause Analyst",
@@ -285,9 +374,9 @@ def run(problem):
             "You understand Ansible variable precedence and RHEL System Roles. "
             "Do not invent values. Distinguish drift from an intentional host override."
         ),
-        tools=[read_state_file],
+        tools=[list_state_files, search_state_files, read_state_file],
         llm=_llm(),
-        verbose=True,
+        verbose=crew_verbose(),
     )
     pr_author = Agent(
         role="GitOps Remediation Author",
@@ -296,9 +385,9 @@ def run(problem):
             "You never remediate hosts directly. Change the state repository through the "
             "PR tool, preserve unrelated content, and include evidence."
         ),
-        tools=[read_state_file, create_github_pull_request],
+        tools=[list_state_files, search_state_files, read_state_file, create_github_pull_request],
         llm=_llm(),
-        verbose=True,
+        verbose=crew_verbose(),
     )
     reporter = Agent(
         role="Incident Reporter",
@@ -306,14 +395,19 @@ def run(problem):
         backstory="You produce concise, factual incident reports with no unsupported claims.",
         tools=[],
         llm=_llm(),
-        verbose=True,
+        verbose=crew_verbose(),
     )
 
     investigate = Task(
         description=(
             f"Investigate this issue: {problem}\n"
-            "Discover available tools, query the named host, and read the relevant kernel "
-            "settings files from the checked-out state repository. Do not modify anything."
+            "Discover available Linux tools and query the named host. List the repository "
+            "root ('.'), then search for issue terms and variables to find the actual policy "
+            "files. Read the inventory, applicable group/host variables, and consuming tasks "
+            "to establish scope and precedence. Do not guess filenames or treat a failed "
+            "guess as missing policy. Distinguish active YAML from commented examples. "
+            "Investigate the reported subsystem; do not assume every incident is a kernel issue. "
+            "Do not modify anything."
         ),
         expected_output="Evidence with host, tool names, observed values, and relevant state files.",
         agent=investigator,
@@ -352,9 +446,10 @@ def run(problem):
         agents=[investigator, analyst, pr_author, reporter],
         tasks=[investigate, analyze, propose, report],
         process=Process.sequential,
-        verbose=True,
+        verbose=crew_verbose(),
     )
-    return crew.kickoff()
+    with trace_run("incident-investigation", AGENT_RUN_ID):
+        return crew.kickoff()
 
 
 def main():

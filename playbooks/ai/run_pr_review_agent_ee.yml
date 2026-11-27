@@ -1,0 +1,14 @@
+---
+# Execute maintainer feedback inside the EE; keep the existing VM playbook intact.
+- name: Run CrewAI PR review inside the EE # noqa: fqcn[keyword] - explicit collections policy
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  collections: [ansible.builtin]
+  vars:
+    _crewai_workflow: review
+  tasks:
+    - name: Prepare, execute and clean up the isolated CrewAI job
+      ansible.builtin.import_tasks: tasks/run_crewai_ee.yml
+      tags: [crewai]

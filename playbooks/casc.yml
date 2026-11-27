@@ -1,5 +1,12 @@
 ---
-# Apply the CrewAI demo's Controller and EDA configuration. VM runtime setup is
-# separate so ordinary CasC updates preserve the installed agent environment.
+# Apply Controller/EDA configuration and reconcile the deployed CrewAI scripts.
+# Initial VM/package setup stays separate; runtime updates preserve its .env,
+# Python packages, state checkout and selected external Linux MCP backend.
 - name: Configure the RHEL GitOps AAP and CrewAI event path
   ansible.builtin.import_playbook: aap_config.yml
+
+- name: Reconcile the internal Phoenix dashboard before enabling tracing
+  ansible.builtin.import_playbook: setup/05_configure_phoenix.yml
+
+- name: Reconcile the CrewAI runtime from the same source templates
+  ansible.builtin.import_playbook: setup/update_crewai_runtime.yml

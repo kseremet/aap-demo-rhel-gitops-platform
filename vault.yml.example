@@ -19,3 +19,7 @@ vault_github_webhook_secret: CHANGE_ME
 
 # LLM API key used by the CrewAI runtime on ai-01.
 vault_ai_llm_api_key: CHANGE_ME
+
+# Only required when demo_ee_registry_auth=true for a private EE image registry.
+vault_hub_registry_username: CHANGE_ME
+vault_hub_registry_password: CHANGE_ME

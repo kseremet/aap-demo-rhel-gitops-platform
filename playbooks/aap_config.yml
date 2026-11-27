@@ -31,9 +31,41 @@
              and vault_demo_ssh_private_key not in ['', 'CHANGE_ME'])
             or (demo_ssh_private_key_path is file)
           - demo_ai_backend | default('crewai') == 'crewai'
+          - demo_ai_runtime | default('vm') in ['vm', 'ee']
         fail_msg: >-
           Run VM discovery first and configure AAP, SCM, SSH key and CrewAI
           settings before applying CasC. demo_ai_backend must be crewai.
+
+    # Fail before disabling EDA or changing JTs if the operator has not supplied
+    # a built image and runtime credentials. VM mode remains the default.
+    - name: Validate the optional CrewAI EE configuration
+      ansible.builtin.assert:
+        that:
+          - demo_execution_environment_image | default('CHANGE_ME') is not search('CHANGE_ME')
+          - demo_execution_environment_image | default('') | length > 0
+          - vault_ai_llm_api_key | default('') not in ['', 'CHANGE_ME']
+          - vault_github_token | default('') not in ['', 'CHANGE_ME']
+          - not (demo_ee_registry_auth | default(false) | bool) or vault_hub_registry_username | default('') | length > 0
+          - not (demo_ee_registry_auth | default(false) | bool) or vault_hub_registry_password | default('') | length > 0
+        fail_msg: Supply the built CrewAI EE image and required vault credentials before selecting EE mode.
+      when: demo_ai_runtime | default('vm') == 'ee'
+      no_log: true
+
+    - name: Load CrewAI EE credentials, image and VM fallback definitions
+      ansible.builtin.include_vars:
+        file: ../group_vars/all/crewai_ee.yml
+      when: demo_ai_runtime | default('vm') == 'ee'
+
+    - name: Extend CasC with EE credentials and independent VM fallback templates
+      ansible.builtin.set_fact:
+        controller_credential_types: "{{ crewai_ee_credential_types }}"
+        controller_execution_environments: "{{ crewai_ee_execution_environments }}"
+        controller_credentials: >-
+          {{ controller_credentials + crewai_ee_credentials
+             + (crewai_ee_registry_credentials if demo_ee_registry_auth | default(false) | bool else []) }}
+        controller_templates: "{{ controller_templates + crewai_vm_fallback_templates + crewai_ee_verification_templates }}"
+      when: demo_ai_runtime | default('vm') == 'ee'
+      no_log: true
 
     # Resolve live pod-network addresses in memory, including the AI control VM.
     # Local generated files and the VM's installed CrewAI runtime stay untouched.

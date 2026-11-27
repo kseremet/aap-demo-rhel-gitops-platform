@@ -1,0 +1,49 @@
+---
+# Remove only the internal demo dashboard. Trace storage is retained unless a
+# second, explicit flag requests its deletion. This does not alter AO or MCP.
+- name: Remove the Phoenix demo dashboard # noqa: fqcn[keyword] - explicit collections policy
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  collections: [ansible.builtin, kubernetes.core]
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+  vars_files:
+    - ../../vault.yml
+    - ../../group_vars/all/demo_variables.yml
+  tasks:
+    - name: Require explicit Phoenix removal confirmation
+      ansible.builtin.assert:
+        that:
+          - demo_phoenix_cleanup_confirm | default(false) | bool
+        fail_msg: Pass demo_phoenix_cleanup_confirm=true to remove the dashboard.
+      tags: [phoenix]
+
+    - name: Remove only the Phoenix application and Service
+      kubernetes.core.k8s:
+        state: absent
+        host: "{{ openshift_api_url }}"
+        api_key: "{{ vault_openshift_token }}"
+        validate_certs: "{{ openshift_validate_certs }}"
+        api_version: "{{ item.api_version }}"
+        kind: "{{ item.kind }}"
+        name: phoenix
+        namespace: "{{ openshift_vm_namespace }}"
+        wait: true
+      loop:
+        - {api_version: apps/v1, kind: Deployment}
+        - {api_version: v1, kind: Service}
+      tags: [phoenix]
+
+    - name: Remove trace data only when explicitly requested
+      kubernetes.core.k8s:
+        state: absent
+        host: "{{ openshift_api_url }}"
+        api_key: "{{ vault_openshift_token }}"
+        validate_certs: "{{ openshift_validate_certs }}"
+        api_version: v1
+        kind: PersistentVolumeClaim
+        name: phoenix-data
+        namespace: "{{ openshift_vm_namespace }}"
+      when: demo_phoenix_delete_data | default(false) | bool
+      tags: [phoenix]

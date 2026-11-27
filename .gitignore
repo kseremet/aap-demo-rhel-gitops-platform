@@ -12,3 +12,4 @@ __pycache__/
 context/_build/
 context/files/
 context/context/
+context/crewai/context/

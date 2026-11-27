@@ -6,6 +6,16 @@ demo_platform_project_name: rhel-gitops-platform
 demo_inventory_name: RHEL Fleet
 demo_ai_inventory_name: AI Control
 demo_machine_credential_name: RHEL SSH Key
+# Leave VM mode selected until the amd64 image is built, pushed and smoke-tested.
+demo_ai_runtime: vm
+demo_execution_environment_name: RHEL GitOps CrewAI EE
+demo_execution_environment_image: CHANGE_ME_REGISTRY/ee-rhel-gitops-crewai:1.15.17-1
+hub_registry_credential_name: PAH Container Registry
+hub_registry_host: "{{ aap_hostname | regex_replace('^https?://', '') | regex_replace('/$', '') }}"
+# Enable for private registries; provide vault_hub_registry_username/password.
+demo_ee_registry_auth: false
+demo_ai_api_credential_name: RHEL GitOps CrewAI API Tokens
+demo_ai_vm_execution_environment: Default execution environment
 demo_state_scm_url: CHANGE_ME_GIT_REPO_URL
 demo_state_scm_branch: main
 demo_platform_scm_url: CHANGE_ME_PLATFORM_REPO_URL
@@ -33,6 +43,14 @@ rhc_repos_baseline:
 # AI control VM model settings. The API key belongs in vault.yml.
 demo_ai_llm_provider: openai
 demo_ai_llm_model: gpt-5.6-luna
+
+# Internal Phoenix dashboard and CrewAI tracing; browser access uses Telepresence.
+demo_phoenix_enabled: true
+demo_phoenix_project: rhel-gitops
+demo_phoenix_image: docker.io/arizephoenix/phoenix:version-22.1.0-nonroot
+demo_phoenix_storage_size: 2Gi
+# Empty selects the cluster's default StorageClass.
+demo_phoenix_storage_class: ""
 demo_ai_llm_base_url: https://api.openai.com/v1
 demo_ai_repo_path: /home/cloud-user/agentic-aiops/state-repo
 demo_ai_github_api_url: https://api.github.com

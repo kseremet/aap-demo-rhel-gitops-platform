@@ -1,0 +1,48 @@
+---
+# Deploy a single internal Phoenix dashboard with persistent SQLite storage.
+# CasC runs this before updating CrewAI scripts. No public ingress, API keys,
+# privileged permissions, separate collector or external database are required.
+- name: Configure the internal Phoenix demo dashboard # noqa: fqcn[keyword] - explicit collections policy
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  collections: [ansible.builtin, kubernetes.core]
+  tags: [phoenix]
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+  vars_files:
+    - ../../vault.yml
+    - ../../group_vars/all/demo_variables.yml
+    - ../../group_vars/all/phoenix.yml
+  tasks:
+    - name: Apply the Phoenix PVC, Service and single-replica Deployment
+      kubernetes.core.k8s:
+        state: present
+        host: "{{ openshift_api_url }}"
+        api_key: "{{ vault_openshift_token }}"
+        validate_certs: "{{ openshift_validate_certs }}"
+        definition: "{{ lookup('ansible.builtin.template', '../templates/phoenix.yml.j2') | from_yaml_all | list }}"
+      when: phoenix_enabled | bool
+
+    - name: Wait for the Phoenix application to become available
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: phoenix
+        namespace: "{{ openshift_vm_namespace }}"
+        host: "{{ openshift_api_url }}"
+        api_key: "{{ vault_openshift_token }}"
+        validate_certs: "{{ openshift_validate_certs }}"
+        wait: true
+        wait_timeout: 300
+        wait_condition:
+          type: Available
+          status: "True"
+      when: phoenix_enabled | bool
+
+    - name: Report the internal dashboard address
+      ansible.builtin.debug:
+        msg: >-
+          Phoenix: http://phoenix.{{ openshift_vm_namespace }}.svc.cluster.local:6006
+          (Telepresence required). Project: {{ demo_phoenix_project | default('rhel-gitops') }}.
+      when: phoenix_enabled | bool

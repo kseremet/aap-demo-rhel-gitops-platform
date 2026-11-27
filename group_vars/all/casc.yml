@@ -72,14 +72,20 @@ controller_templates:
     playbook: playbooks/cleanup.yml
     survey_enabled: true
   - name: JT - AI Incident Investigation
-    description: Investigate an incident on the AI control VM and propose a GitHub pull request.
+    description: Investigate an incident using CrewAI and propose a GitHub pull request.
     organization: "{{ demo_organization_name }}"
     job_type: run
     inventory: "{{ demo_ai_inventory_name }}"
     project: "{{ demo_platform_project_name }}"
-    playbook: playbooks/ai/run_incident_agent.yml
+    playbook: "{{ 'playbooks/ai/run_incident_agent_ee.yml' if demo_ai_runtime | default('vm') == 'ee' else 'playbooks/ai/run_incident_agent.yml' }}"
+    execution_environment: >-
+      {{ (demo_execution_environment_name | default('RHEL GitOps CrewAI EE'))
+         if demo_ai_runtime | default('vm') == 'ee'
+         else (demo_ai_vm_execution_environment | default('Default execution environment')) }}
+    # AAP receives resolved public settings and injects API tokens separately.
+    extra_vars: "{{ crewai_ee_job_settings if demo_ai_runtime | default('vm') == 'ee' else {} }}"
     credentials:
-      - "{{ demo_machine_credential_name }}"
+      - "{{ (demo_ai_api_credential_name | default('RHEL GitOps CrewAI API Tokens')) if demo_ai_runtime | default('vm') == 'ee' else demo_machine_credential_name }}"
     survey_enabled: true
     survey_spec:
       name: AI incident investigation
@@ -104,9 +110,14 @@ controller_templates:
     job_type: run
     inventory: "{{ demo_ai_inventory_name }}"
     project: "{{ demo_platform_project_name }}"
-    playbook: playbooks/ai/run_pr_review_agent.yml
+    playbook: "{{ 'playbooks/ai/run_pr_review_agent_ee.yml' if demo_ai_runtime | default('vm') == 'ee' else 'playbooks/ai/run_pr_review_agent.yml' }}"
+    execution_environment: >-
+      {{ (demo_execution_environment_name | default('RHEL GitOps CrewAI EE'))
+         if demo_ai_runtime | default('vm') == 'ee'
+         else (demo_ai_vm_execution_environment | default('Default execution environment')) }}
+    extra_vars: "{{ crewai_ee_job_settings if demo_ai_runtime | default('vm') == 'ee' else {} }}"
     credentials:
-      - "{{ demo_machine_credential_name }}"
+      - "{{ (demo_ai_api_credential_name | default('RHEL GitOps CrewAI API Tokens')) if demo_ai_runtime | default('vm') == 'ee' else demo_machine_credential_name }}"
     ask_variables_on_launch: true
 
 eda_credentials:

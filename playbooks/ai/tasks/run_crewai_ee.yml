@@ -1,0 +1,151 @@
+---
+# AAP injects the two API tokens through a custom credential. Public runtime
+# settings are baked into JT extra_vars by CasC; ignored local config is not used.
+- name: Validate the EE job inputs
+  ansible.builtin.assert:
+    that:
+      - _crewai_workflow in ['incident', 'review', 'verify']
+      - demo_state_scm_url is defined
+      - demo_state_scm_url is match('https://')
+      - _crewai_workflow != 'incident' or ai_incident_prompt | default('') | trim | length > 0
+      - _crewai_workflow != 'review' or pr_review_event is defined
+    fail_msg: Supply an HTTPS state repository and the incident prompt or PR event.
+  tags: [crewai]
+
+- name: Require the AAP-injected CrewAI API tokens
+  ansible.builtin.assert:
+    that:
+      - lookup('ansible.builtin.env', 'AI_LLM_API_KEY') | length > 0
+      - lookup('ansible.builtin.env', 'GITHUB_TOKEN') | length > 0
+    fail_msg: Attach the CrewAI API Tokens credential before launching this job.
+  no_log: true
+  tags: [crewai]
+
+- name: Create a private working directory for this job only
+  ansible.builtin.tempfile:
+    state: directory
+    prefix: crewai-job-
+  register: _crewai_workdir
+  tags: [crewai]
+
+# A fresh clone and per-job files avoid shared mutable state across incident and
+# review runs. Always remove the checkout, askpass helper and event after exit.
+- name: Run CrewAI with an isolated repository checkout
+  tags: [crewai]
+  block:
+    - name: Render the same scripts used by the VM runtime
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../roles/ai_control/templates/{{ item }}.j2"
+        dest: "{{ _crewai_workdir.path }}/{{ item }}"
+        mode: "0700"
+      vars:
+        ai_control_venv_path: /opt/crewai
+        ai_control_app_path: "{{ _crewai_workdir.path }}"
+      loop: [incident_agent.py, pr_review_agent.py]
+
+    - name: Copy the shared tracing helper from the project
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../roles/ai_control/files/crewai_tracing.py"
+        dest: "{{ _crewai_workdir.path }}/crewai_tracing.py"
+        mode: "0600"
+
+    - name: Copy the read-only integration verifier when requested
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../roles/ai_control/files/verify_crewai_ee.py"
+        dest: "{{ _crewai_workdir.path }}/verify_crewai_ee.py"
+        mode: "0600"
+      when: _crewai_workflow == 'verify'
+
+    - name: Configure Phoenix for this execution
+      ansible.builtin.copy:
+        dest: "{{ _crewai_workdir.path }}/tracing.json"
+        mode: "0600"
+        content: >-
+          {{ {'enabled': demo_phoenix_enabled | default(true) | bool,
+              'project': demo_phoenix_project | default('rhel-gitops'),
+              'endpoint': 'http://phoenix.' ~ openshift_vm_namespace ~ '.svc:6006/v1/traces',
+              'dashboard_url': 'http://phoenix.' ~ openshift_vm_namespace ~ '.svc.cluster.local:6006'} | to_nice_json }}
+
+    # The helper contains no token. Git asks it for the injected environment value
+    # instead of embedding credentials in the clone URL, process argv or Git config.
+    - name: Prepare environment-based GitHub authentication
+      ansible.builtin.copy:
+        dest: "{{ _crewai_workdir.path }}/git-askpass"
+        mode: "0700"
+        content: |
+          #!/bin/sh
+          case "$1" in
+            *Username*) printf '%s\n' 'x-access-token' ;;
+            *Password*) printf '%s\n' "$GITHUB_TOKEN" ;;
+          esac
+
+    - name: Check out the current state repository into this job
+      ansible.builtin.git:
+        repo: "{{ demo_state_scm_url }}"
+        version: "{{ demo_state_scm_branch | default('main') }}"
+        dest: "{{ _crewai_workdir.path }}/state-repo"
+        depth: 1
+      environment:
+        GIT_ASKPASS: "{{ _crewai_workdir.path }}/git-askpass"
+        GIT_TERMINAL_PROMPT: "0"
+        GITHUB_TOKEN: "{{ lookup('ansible.builtin.env', 'GITHUB_TOKEN') }}"
+      no_log: true
+
+    - name: Write the supplied review event inside the private job directory
+      ansible.builtin.copy:
+        dest: "{{ _crewai_workdir.path }}/review-event.json"
+        content: "{{ pr_review_event | to_nice_json }}"
+        mode: "0600"
+      when: _crewai_workflow == 'review'
+
+    - name: Execute CrewAI using the isolated image dependencies
+      ansible.builtin.command:
+        argv: >-
+          {{ ['/opt/crewai/bin/python', _crewai_workdir.path ~ '/' ~ _script]
+             + ([ai_incident_prompt] if _crewai_workflow == 'incident'
+                else ['--event-file', _crewai_workdir.path ~ '/review-event.json']
+                if _crewai_workflow == 'review' else []) }}
+        chdir: "{{ _crewai_workdir.path }}"
+      vars:
+        _script: "{{ {'incident': 'incident_agent.py', 'review': 'pr_review_agent.py', 'verify': 'verify_crewai_ee.py'}[_crewai_workflow] }}"
+      environment:
+        HOME: "{{ _crewai_workdir.path }}"
+        XDG_CACHE_HOME: "{{ _crewai_workdir.path }}/.cache"
+        AI_MCP_MODE: container
+        LINUX_MCP_URL: "{{ demo_ai_mcp_url }}"
+        STATE_REPO_URL: "{{ demo_state_scm_url }}"
+        STATE_REPO_BRANCH: "{{ demo_state_scm_branch | default('main') }}"
+        STATE_REPO_PATH: "{{ _crewai_workdir.path }}/state-repo"
+        AI_LLM_PROVIDER: "{{ demo_ai_llm_provider }}"
+        AI_LLM_MODEL: "{{ demo_ai_llm_model }}"
+        AI_LLM_BASE_URL: "{{ demo_ai_llm_base_url }}"
+        AI_LLM_API_KEY: "{{ lookup('ansible.builtin.env', 'AI_LLM_API_KEY') }}"
+        GITHUB_TOKEN: "{{ lookup('ansible.builtin.env', 'GITHUB_TOKEN') }}"
+        GITHUB_API_URL: "{{ demo_ai_github_api_url | default('https://api.github.com') }}"
+        AI_PR_BRANCH_PREFIX: "{{ demo_ai_pr_branch_prefix | default('aiops/') }}"
+        CREWAI_TRACING_ENABLED: "false"
+      register: _crewai_result
+      changed_when: true
+      failed_when: false
+      no_log: true
+
+    - name: Display the CrewAI report and Phoenix trace reference
+      ansible.builtin.debug:
+        msg: >-
+          {{ _crewai_result.stdout
+             | replace(lookup('ansible.builtin.env', 'AI_LLM_API_KEY'), '[REDACTED]')
+             | replace(lookup('ansible.builtin.env', 'GITHUB_TOKEN'), '[REDACTED]') }}
+
+    - name: Report a failed execution without exposing injected credentials
+      ansible.builtin.assert:
+        that: _crewai_result.rc == 0
+        fail_msg: >-
+          CrewAI exited with status {{ _crewai_result.rc }}:
+          {{ _crewai_result.stderr
+             | replace(lookup('ansible.builtin.env', 'AI_LLM_API_KEY'), '[REDACTED]')
+             | replace(lookup('ansible.builtin.env', 'GITHUB_TOKEN'), '[REDACTED]') }}
+  always:
+    - name: Remove the private job workspace even after failure
+      ansible.builtin.file:
+        path: "{{ _crewai_workdir.path }}"
+        state: absent

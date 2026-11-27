@@ -1,0 +1,84 @@
+---
+# Shared by initial setup and CasC runtime updates. Keep the existing environment,
+# core packages and selected MCP backend; add only pinned tracing dependencies.
+- name: Install the pinned Phoenix tracing instrumentation
+  # The existing venv contains packaging; the minimal RHEL system Python does not.
+  vars:
+    ansible_python_interpreter: "{{ ai_control_venv_path }}/bin/python"
+  ansible.builtin.pip:
+    executable: "{{ ai_control_venv_path }}/bin/pip"
+    name: "{{ ai_control_tracing_packages }}"
+    state: present
+  when: ai_control_tracing_enabled | bool
+  tags: [ai_control, crewai, phoenix]
+
+- name: Deploy the shared tracing helper
+  ansible.builtin.copy:
+    src: crewai_tracing.py
+    dest: "{{ ai_control_app_path }}/crewai_tracing.py"
+    owner: "{{ ai_control_user }}"
+    group: "{{ ai_control_user }}"
+    mode: "0644"
+  tags: [ai_control, crewai, phoenix]
+
+# Keep tracing separate from .env so runtime-only updates preserve all existing
+# credentials, provider settings and the external MCP selection.
+- name: Configure cluster-internal Phoenix tracing
+  ansible.builtin.template:
+    src: tracing.json.j2
+    dest: "{{ ai_control_app_path }}/tracing.json"
+    owner: "{{ ai_control_user }}"
+    group: "{{ ai_control_user }}"
+    mode: "0644"
+  tags: [ai_control, crewai, phoenix]
+
+- name: Deploy CrewAI incident investigation agent
+  ansible.builtin.template:
+    src: incident_agent.py.j2
+    dest: "{{ ai_control_agent_path }}"
+    owner: "{{ ai_control_user }}"
+    group: "{{ ai_control_user }}"
+    mode: "0755"
+    backup: true
+    # In-memory compilation avoids root-owned __pycache__ in Ansible's upload directory.
+    validate: >-
+      {{ ai_control_venv_path }}/bin/python -c
+      'import pathlib, sys; compile(pathlib.Path(sys.argv[1]).read_text(), sys.argv[1], "exec")' %s
+  no_log: true
+  tags:
+    - ai_control
+    - crewai
+
+- name: Deploy CrewAI PR review agent
+  ansible.builtin.template:
+    src: pr_review_agent.py.j2
+    dest: "{{ ai_control_review_agent_path }}"
+    owner: "{{ ai_control_user }}"
+    group: "{{ ai_control_user }}"
+    mode: "0755"
+    backup: true
+    validate: >-
+      {{ ai_control_venv_path }}/bin/python -c
+      'import pathlib, sys; compile(pathlib.Path(sys.argv[1]).read_text(), sys.argv[1], "exec")' %s
+  no_log: true
+  tags:
+    - ai_control
+    - crewai
+    - pr_review
+
+# Import and CLI checks do not start agents, call the LLM or publish a PR.
+- name: Verify both deployed CrewAI entrypoints import successfully
+  become: true
+  become_user: "{{ ai_control_user }}"
+  ansible.builtin.command:
+    argv:
+      - "{{ ai_control_venv_path }}/bin/python"
+      - "{{ item }}"
+      - --help
+  loop:
+    - "{{ ai_control_agent_path }}"
+    - "{{ ai_control_review_agent_path }}"
+  changed_when: false
+  tags:
+    - ai_control
+    - crewai

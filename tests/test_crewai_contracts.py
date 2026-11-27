@@ -116,7 +116,9 @@ def test_casc_configures_only_the_crewai_path_and_retains_shared_objects():
         "github_aap_organization",
     }
     _, entry = load("playbooks/casc.yml")
-    assert [p["ansible.builtin.import_playbook"] for p in entry] == ["aap_config.yml"]
+    assert [p["ansible.builtin.import_playbook"] for p in entry] == [
+        "aap_config.yml", "setup/05_configure_phoenix.yml", "setup/update_crewai_runtime.yml"
+    ]
 
 
 @pytest.mark.parametrize("host", ["ai-01", "web-01"])
