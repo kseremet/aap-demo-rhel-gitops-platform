@@ -243,5 +243,6 @@ and SSH identity. See [setup and verification](docs/setup.md).
 The [CrewAI EE build guide](context/crewai/README.md) provides a separate native
 x86_64 image specification and staged AAP cutover. After its image is built and
 verified, `demo_ai_runtime: ee` selects localhost execution inside that EE and
-creates independently runnable VM fallback templates. Until then VM mode remains
-the default and the live jobs are unchanged.
+creates independently runnable VM fallback templates. VM mode remains the
+default for fresh configurations. The current demo has been switched to the
+tested EE through local CasC settings; see [testing status](docs/testing.md).

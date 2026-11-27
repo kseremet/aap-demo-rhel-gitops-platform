@@ -83,9 +83,13 @@ error.
 
 ## Cutover after the image is available
 
-**Current state: prepared, not activated.** The live JTs still use the VM. Send
-the pushed image reference (preferably its digest), build smoke-test results,
-and whether Controller needs registry authentication before cutover.
+**Current demo state: EE cutover applied and read-only verification passed.**
+The user built and smoke-tested `quay.io/koray/ee-rhel-gitops-crewai:1.15.17-1`.
+Local CasC pins digest
+`sha256:03e015c98fcc8301d18cd78f60134d9cc9c053580486e102feae9515c169f686`.
+Both primary JTs use this image; the independent VM fallbacks remain available.
+A real incident/feedback cycle through the EE is still pending user testing.
+Fresh configurations default to VM mode until an available image is selected.
 
 The planned local configuration is:
 
@@ -109,6 +113,18 @@ the platform repository root after image and project availability are verified.
 CasC registers the EE, API-token credential type/credential and optional registry
 credential, then switches both existing AI JTs to the new localhost playbooks.
 The existing EDA routes keep their JT names.
+
+CasC also provides `JT - AI EE Verification`. It uses the same workspace and
+credentials, checks a fresh checkout and authenticated GitHub access, reads
+web-01's OS release through the external MCP, imports both entrypoints and asks
+the configured model for READY without tools. It publishes no PR and makes no
+host changes. Check its Phoenix trace after running it.
+
+EE model settings come from the JT's CasC-resolved configuration; the VM fallback
+keeps its existing `.env`. Compare those settings during migration if identical
+model behavior is required. A native CrewAI banner saying tracing is disabled
+refers to hosted AMP tracing; the separate OpenInference/Phoenix export remains
+enabled and was verified from AAP.
 
 Each EE job renders the shared agent templates and tracing helper from the AAP
 project into a private temporary directory, clones current state, runs the crew,
